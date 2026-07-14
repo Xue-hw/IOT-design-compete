@@ -1,0 +1,29 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+arduino_secrets.h
+secrets.h
+credentials.h
+
+# ESP-IDF / PlatformIO / Arduino build outputs
+build/
+sdkconfig
+sdkconfig.old
+.pio/
+*.elf
+*.bin
+*.map
+
+# Python / Node
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+dist/
