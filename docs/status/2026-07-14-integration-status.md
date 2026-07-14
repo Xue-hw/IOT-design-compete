@@ -18,6 +18,28 @@ GET  /api/v1/timeseries?device_id=focuscube-s3-01&date=2026-07-14&metric=light.l
 
 已验证内容包括设备状态、中文日报、统计指标、建议、低电量提醒、光线偏暗提醒和光照时序数据。
 
+## AS7341 真实光照闭环
+
+AS7341 代理已通过 `POST /api/v1/telemetry` 持续上报真实光照，后端返回 HTTP 201、`stored: true`。三档实测结果如下：
+
+| 实测照度 | 设备标签 | 后端阈值判定 |
+|---:|---|---|
+| `100.56 lux` | `too_dim` | 一致 |
+| `360.72 lux` | `suitable` | 一致 |
+| `4013.64 lux` | `too_bright` | 一致 |
+
+三次采样均由 A 确认 `saturated: false`。`/status` 最新值已更新为 `4013.64 lux`，时序、提醒和日报验收无异常。
+
+光照值是 AS7341 换算得到的估算照度，当前尚未经过标准照度计标定；材料中应表述为“估算照度”，不得声明为计量级照度。
+
+## 可选 `valid` 规则
+
+- `imu.valid`、`focus.valid`、`power.valid` 可选，缺省为 `true`。
+- AS7341 代理当前只提供真实光照，其余占位模块显式发送 `valid: false`。
+- 后端不得使用 `valid: false` 数据生成统计、提醒、日报或融合结论。
+- 真实 IMU、电量和专注数据接入后改为 `valid: true`，或省略该字段。
+- 当前没有 S3 实物，IMU 硬件测试延期至设备到位后进行。
+
 ## P4 七寸屏
 
 - 工程原位置：`/Users/buptniaosuan/Desktop/物联网/ESP32-P4-WIFI6-Touch-LCD-7B-main/examples/ESP-IDF/10_lvgl_demo_v9`
@@ -31,19 +53,19 @@ GET  /api/v1/timeseries?device_id=focuscube-s3-01&date=2026-07-14&metric=light.l
 
 ![P4 七寸屏阶段性联调画面](../assets/p4-display-status-2026-07-14.jpg)
 
-## 当前阻塞
+## 已解决问题
 
-`10.129.90.92:8000` 当前表现为 TCP 端口可连接，但 HTTP 请求持续超时；电脑和 P4 结果一致，因此问题归属后端服务，而非 P4 网络栈。成员 C 正在处理。
+- 此前 `10.129.90.92:8000` 出现 TCP 可连接但 HTTP 持续超时；当前接口和 AS7341 实际上报已经恢复并完成验证。
 
 ## 已知数据问题
 
 - 早期 mock 时序中存在多条相同 `ts`，后续 S3 或 replay 必须使用递增的真实时间戳。
 - 日报生成后新增的 `60 lux` 数据没有进入已缓存日报；演示前必须触发重新生成，确认 `min_lux`、`avg_lux` 和 `suitable_light_ratio` 更新。
-- 当前没有可用 S3 主固件，S3 工程和真实 telemetry 仍待补齐。
+- 当前没有可用 S3 主固件；真实光照由 AS7341 代理提供，真实 IMU、专注和电量仍待补齐。
 
 ## 下一次验收
 
-- 后端恢复后，电脑和 P4 同时验证 `status/report/reminders`。
+- 让 P4/Web 正确处理 `valid: false`，显示“等待真实数据”而不是占位数值。
 - P4 展示真实状态、AI 复盘和提醒，连续刷新且断网不崩溃。
 - 成员 B 上传 P4 工程、依赖说明、烧录步骤和完整屏幕照片。
 - 成员 C 上传后端工程、模型调用说明、配置模板和失败兜底说明。

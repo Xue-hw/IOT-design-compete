@@ -1,0 +1,26 @@
+{
+  "device_id": "focuscube-s3-01",
+  "source": "c3-as7341-proxy",
+  "ts": 1784039000,
+  "light": {
+    "lux": 360.72,
+    "label": "suitable"
+  },
+  "imu": {
+    "valid": false,
+    "face": 0,
+    "mode": "unknown",
+    "activity": 0.0
+  },
+  "focus": {
+    "valid": false,
+    "state": "idle",
+    "remaining_s": 0,
+    "session_count": 0
+  },
+  "power": {
+    "valid": false,
+    "battery_pct": 0,
+    "charging": false
+  }
+}
