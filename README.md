@@ -16,6 +16,7 @@ Web 看板 + ESP32-P4 七寸屏
 
 - 后端已验证 `telemetry`、`status`、`report/daily`、`reminders` 和 `timeseries` 接口。
 - AS7341 真实光照已完成偏暗、适宜、过亮三档闭环测试；IMU、专注和电量仍为无效占位数据。
+- C3 光照代理统一使用 `focuscube-c3-proxy-01`；未来真实 S3 保留 `focuscube-s3-01`，禁止混用。
 - ESP32-P4 七寸屏已显示中文界面并成功读取过真实 `status` JSON。
 - P4 工程暂未同步到本仓库，成员 B 上传后放入 `firmware/esp32-p4/`。
 - S3 比赛固件仍待提供，上传后放入 `firmware/esp32-s3/`。

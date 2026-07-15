@@ -22,6 +22,15 @@ GET  /api/v1/timeseries?device_id=focuscube-s3-01&date=2026-07-14&metric=light.l
 
 AS7341 代理已通过 `POST /api/v1/telemetry` 持续上报真实光照，后端返回 HTTP 201、`stored: true`。三档实测结果如下：
 
+代理统一设备身份：
+
+```text
+device_id=focuscube-c3-proxy-01
+source=c3-as7341-proxy
+```
+
+早期使用 `focuscube-s3-01` 的代理数据属于联调历史数据；后续不得继续混用，真实 S3 到位后单独使用 `focuscube-s3-01`。
+
 | 实测照度 | 设备标签 | 后端阈值判定 |
 |---:|---|---|
 | `100.56 lux` | `too_dim` | 一致 |
