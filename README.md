@@ -29,6 +29,7 @@ Web 看板 + ESP32-P4 七寸屏
 | 路径 | 内容 | 状态 |
 |---|---|---|
 | [`docs/`](docs/) | 文档索引、联调状态、图片素材 | 持续更新 |
+| [`firmware/esp32-c3/`](firmware/esp32-c3/) | AS7341 光照采集固件与电脑桥接程序 | 已上传、测试通过 |
 | [`firmware/esp32-s3/`](firmware/esp32-s3/) | FocusCube S3 采集端固件 | 待上传 |
 | [`firmware/esp32-p4/`](firmware/esp32-p4/) | P4 七寸屏展示端固件 | 待成员 B 上传 |
 | [`firmware/arduino/`](firmware/arduino/) | Arduino 历史原型 | 已归档 |
