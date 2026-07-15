@@ -57,8 +57,12 @@ menu "FocusCube P4 Configuration"
             mock data until the backend address is known.
 
     config FOCUSCUBE_DEVICE_ID
-        string "S3 device id"
-        default "focuscube-s3-01"
+        string "Displayed acquisition device id"
+        default "focuscube-c3-proxy-01"
+        help
+            Single source of truth for the device shown by status, report and
+            reminder requests. Change only this value when the real S3
+            telemetry source is ready.
 
     config FOCUSCUBE_REPORT_DATE
         string "Daily report date"

@@ -42,12 +42,17 @@ static const char *TAG = "focuscube_p4";
 typedef struct {
     bool has_s3_online;
     bool s3_online;
+    bool light_valid;
+    bool imu_valid;
+    bool focus_valid;
+    bool power_valid;
     int lux;
     int focus_minutes;
     int pomodoro_count;
     int remaining_seconds;
     int battery_pct;
     bool charging;
+    char device_id[40];
     char focus_state[24];
     char light_label[24];
     char s3_summary[128];
@@ -156,6 +161,12 @@ static bool copy_json_string(char *dst, size_t dst_size, cJSON *obj, const char 
     return false;
 }
 
+static bool json_measurement_is_valid(cJSON *obj)
+{
+    cJSON *valid = cJSON_GetObjectItemCaseSensitive(obj, "valid");
+    return !cJSON_IsBool(valid) || cJSON_IsTrue(valid);
+}
+
 static bool get_json_int(cJSON *obj, const char *key, int *out)
 {
     cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
@@ -189,14 +200,18 @@ static void dashboard_apply_live_data(const focuscube_data_t *data)
 
     if (s_s3_state_label != NULL) {
         if (data->has_s3_online) {
-            lv_label_set_text(s_s3_state_label, data->s3_online ? "S3：在线" : "S3：离线");
+            lv_label_set_text_fmt(s_s3_state_label, "设备 %s：%s",
+                                  data->device_id[0] != '\0' ? data->device_id : CONFIG_FOCUSCUBE_DEVICE_ID,
+                                  data->s3_online ? "在线" : "离线");
         } else {
             lv_label_set_text(s_s3_state_label, data->s3_summary);
         }
     }
 
     if (s_lux_label != NULL) {
-        if (data->lux >= 0) {
+        if (!data->light_valid) {
+            lv_label_set_text(s_lux_label, "当前光照：等待真实数据");
+        } else if (data->lux >= 0) {
             lv_label_set_text_fmt(s_lux_label, "当前光照：%d lux · %s", data->lux, data->light_label);
         } else {
             lv_label_set_text(s_lux_label, "当前光照：等待数据");
@@ -204,7 +219,9 @@ static void dashboard_apply_live_data(const focuscube_data_t *data)
     }
 
     if (s_focus_label != NULL) {
-        if (strcmp(data->focus_state, "running") == 0 && data->remaining_seconds >= 0) {
+        if (!data->focus_valid) {
+            lv_label_set_text(s_focus_label, "专注状态：等待真实数据");
+        } else if (strcmp(data->focus_state, "running") == 0 && data->remaining_seconds >= 0) {
             lv_label_set_text_fmt(s_focus_label, "专注状态：专注中 · 剩余 %d 分钟 · 第 %d 次",
                                   (data->remaining_seconds + 59) / 60,
                                   data->pomodoro_count >= 0 ? data->pomodoro_count : 0);
@@ -223,7 +240,9 @@ static void dashboard_apply_live_data(const focuscube_data_t *data)
     }
 
     if (s_battery_label != NULL) {
-        if (data->battery_pct >= 0) {
+        if (!data->power_valid) {
+            lv_label_set_text(s_battery_label, "电量：等待真实数据");
+        } else if (data->battery_pct >= 0) {
             lv_label_set_text_fmt(s_battery_label, "电量：%d%% · %s",
                                   data->battery_pct, data->charging ? "正在充电" : "未充电");
         } else {
@@ -621,9 +640,8 @@ static bool focuscube_parse_status(const char *json, focuscube_data_t *data)
 
         cJSON_ArrayForEach(device, devices) {
             cJSON *device_id = cJSON_GetObjectItemCaseSensitive(device, "device_id");
-            cJSON *source = cJSON_GetObjectItemCaseSensitive(device, "source");
-            bool is_s3 = (cJSON_IsString(device_id) && strcmp(device_id->valuestring, CONFIG_FOCUSCUBE_DEVICE_ID) == 0) ||
-                         (cJSON_IsString(source) && strcmp(source->valuestring, "s3") == 0);
+            bool is_s3 = cJSON_IsString(device_id) && device_id->valuestring != NULL &&
+                         strcmp(device_id->valuestring, CONFIG_FOCUSCUBE_DEVICE_ID) == 0;
 
             if (!is_s3) {
                 continue;
@@ -632,22 +650,28 @@ static bool focuscube_parse_status(const char *json, focuscube_data_t *data)
             cJSON *online = cJSON_GetObjectItemCaseSensitive(device, "online");
             data->has_s3_online = cJSON_IsBool(online);
             data->s3_online = cJSON_IsTrue(online);
+            data->light_valid = false;
+            data->imu_valid = false;
+            data->focus_valid = false;
+            data->power_valid = false;
+            snprintf(data->device_id, sizeof(data->device_id), "%s", device_id->valuestring);
             copy_json_string(data->s3_summary, sizeof(data->s3_summary), device, "summary");
 
             cJSON *light = cJSON_GetObjectItemCaseSensitive(device, "light");
             if (cJSON_IsObject(light)) {
+                data->light_valid = json_measurement_is_valid(light);
                 cJSON *lux = cJSON_GetObjectItemCaseSensitive(light, "lux");
-                if (cJSON_IsNumber(lux)) {
+                if (data->light_valid && cJSON_IsNumber(lux)) {
                     data->lux = (int)(lux->valuedouble + 0.5);
                 }
 
                 cJSON *label = cJSON_GetObjectItemCaseSensitive(light, "label");
-                if (cJSON_IsString(label) && label->valuestring != NULL) {
+                if (data->light_valid && cJSON_IsString(label) && label->valuestring != NULL) {
                     const char *display_label = label->valuestring;
                     if (strcmp(display_label, "too_dim") == 0) {
                         display_label = "偏暗";
                     } else if (strcmp(display_label, "too_bright") == 0) {
-                        display_label = "偏亮";
+                        display_label = "过亮";
                     } else if (strcmp(display_label, "suitable") == 0) {
                         display_label = "适宜";
                     }
@@ -655,18 +679,27 @@ static bool focuscube_parse_status(const char *json, focuscube_data_t *data)
                 }
             }
 
+            cJSON *imu = cJSON_GetObjectItemCaseSensitive(device, "imu");
+            data->imu_valid = cJSON_IsObject(imu) && json_measurement_is_valid(imu);
+
             cJSON *focus = cJSON_GetObjectItemCaseSensitive(device, "focus");
             if (cJSON_IsObject(focus)) {
-                copy_json_string(data->focus_state, sizeof(data->focus_state), focus, "state");
-                get_json_int(focus, "remaining_s", &data->remaining_seconds);
-                get_json_int(focus, "session_count", &data->pomodoro_count);
+                data->focus_valid = json_measurement_is_valid(focus);
+                if (data->focus_valid) {
+                    copy_json_string(data->focus_state, sizeof(data->focus_state), focus, "state");
+                    get_json_int(focus, "remaining_s", &data->remaining_seconds);
+                    get_json_int(focus, "session_count", &data->pomodoro_count);
+                }
             }
 
             cJSON *power = cJSON_GetObjectItemCaseSensitive(device, "power");
             if (cJSON_IsObject(power)) {
-                get_json_int(power, "battery_pct", &data->battery_pct);
-                cJSON *charging = cJSON_GetObjectItemCaseSensitive(power, "charging");
-                data->charging = cJSON_IsTrue(charging);
+                data->power_valid = json_measurement_is_valid(power);
+                if (data->power_valid) {
+                    get_json_int(power, "battery_pct", &data->battery_pct);
+                    cJSON *charging = cJSON_GetObjectItemCaseSensitive(power, "charging");
+                    data->charging = cJSON_IsTrue(charging);
+                }
             }
 
             parsed = true;
@@ -1019,7 +1052,7 @@ static void focuscube_dashboard_create(void)
     lv_obj_set_style_text_align(s_badge_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(s_badge_label);
 
-    lv_obj_t *status_card = create_card(scr, 36, 116, 448, 250, "S3 状态", lv_color_hex(0x2f80ed));
+    lv_obj_t *status_card = create_card(scr, 36, 116, 448, 250, "采集设备状态", lv_color_hex(0x2f80ed));
     s_s3_state_label = create_text(status_card, "S3：等待数据", 24, 62, 390,
                                    &focuscube_font_cn_18, lv_color_hex(0x152238));
     s_lux_label = create_text(status_card, "当前光照：等待数据", 24, 98, 390,
