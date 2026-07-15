@@ -38,6 +38,7 @@ static const char *TAG = "focuscube_p4";
 #define FOCUSCUBE_REMINDER_INTERVAL_MS 10000
 #define FOCUSCUBE_REPORT_INTERVAL_MS 60000
 #define FOCUSCUBE_PORTAL_RECHECK_MS 45000
+#define FOCUSCUBE_NETWORK_TASK_STACK_SIZE 24576
 
 typedef struct {
     bool has_s3_online;
@@ -1108,5 +1109,6 @@ void app_main(void)
 
     bsp_display_unlock();
 
-    xTaskCreate(focuscube_network_task, "focuscube_net", 12288, NULL, 5, NULL);
+    xTaskCreate(focuscube_network_task, "focuscube_net", FOCUSCUBE_NETWORK_TASK_STACK_SIZE,
+                NULL, 5, NULL);
 }
