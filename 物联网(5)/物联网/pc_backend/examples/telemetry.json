@@ -1,0 +1,23 @@
+{
+  "device_id": "focuscube-s3-01",
+  "source": "s3",
+  "ts": 1718000000,
+  "light": {
+    "lux": 235.6,
+    "label": "suitable"
+  },
+  "imu": {
+    "face": 2,
+    "mode": "focus",
+    "activity": 0.32
+  },
+  "focus": {
+    "state": "running",
+    "remaining_s": 940,
+    "session_count": 3
+  },
+  "power": {
+    "battery_pct": 78,
+    "charging": false
+  }
+}

@@ -51,22 +51,20 @@ menu "FocusCube P4 Configuration"
 
     config FOCUSCUBE_BACKEND_BASE_URL
         string "Backend base URL"
-        default "http://10.129.90.92:8000"
+        default "http://82.156.238.244/focuscube"
         help
-            Example: http://192.168.1.100:8080. Leave empty to keep using local
-            mock data until the backend address is known.
+            Production FocusCube API base URL. Override this only when testing
+            against a backend running on the same reachable local network.
 
     config FOCUSCUBE_DEVICE_ID
         string "Displayed acquisition device id"
         default "focuscube-c3-proxy-01"
         help
             Single source of truth for the device shown by status, report and
-            reminder requests. Change only this value when the real S3
-            telemetry source is ready.
-
-    config FOCUSCUBE_REPORT_DATE
-        string "Daily report date"
-        default "2026-07-14"
+            reminder requests. The C3 proxy id is a temporary light-source
+            trace id, not a third product node. Keep it until EYE testing is
+            complete, then use the formally assigned EYE or Cube id. Only one
+            primary device is expected online at a time.
 
     config FOCUSCUBE_HTTP_TIMEOUT_MS
         int "HTTP timeout in milliseconds"

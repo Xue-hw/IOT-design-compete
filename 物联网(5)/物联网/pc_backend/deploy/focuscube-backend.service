@@ -1,0 +1,22 @@
+[Unit]
+Description=FocusCube FastAPI backend
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/focuscube-backend
+EnvironmentFile=/opt/focuscube-backend/.env
+ExecStart=/opt/focuscube-backend/.venv/bin/python run.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

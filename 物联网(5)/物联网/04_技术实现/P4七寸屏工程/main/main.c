@@ -20,12 +20,12 @@
 #include "esp_netif.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
-#include "cJSON.h"
 #include "esp_memory_utils.h"
 #include "lvgl.h"
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
 #include "bsp_board_extra.h"
+#include "focuscube_data.h"
 
 LV_FONT_DECLARE(focuscube_font_cn_18);
 
@@ -39,28 +39,6 @@ static const char *TAG = "focuscube_p4";
 #define FOCUSCUBE_REPORT_INTERVAL_MS 60000
 #define FOCUSCUBE_PORTAL_RECHECK_MS 45000
 #define FOCUSCUBE_NETWORK_TASK_STACK_SIZE 24576
-
-typedef struct {
-    bool has_s3_online;
-    bool s3_online;
-    bool light_valid;
-    bool imu_valid;
-    bool focus_valid;
-    bool power_valid;
-    int lux;
-    int focus_minutes;
-    int pomodoro_count;
-    int remaining_seconds;
-    int battery_pct;
-    bool charging;
-    char device_id[40];
-    char focus_state[24];
-    char light_label[24];
-    char s3_summary[128];
-    char report[512];
-    char suggestion[256];
-    char reminders[512];
-} focuscube_data_t;
 
 typedef struct {
     char *data;
@@ -83,6 +61,7 @@ static lv_obj_t *s_lux_label;
 static lv_obj_t *s_focus_label;
 static lv_obj_t *s_battery_label;
 static lv_obj_t *s_report_label;
+static lv_obj_t *s_reminder_scroll;
 static lv_obj_t *s_reminder_label;
 static lv_obj_t *s_footer_label;
 
@@ -133,51 +112,6 @@ static bool focuscube_wifi_configured(void)
 static bool focuscube_backend_configured(void)
 {
     return strlen(CONFIG_FOCUSCUBE_BACKEND_BASE_URL) > 0;
-}
-
-static void focuscube_data_init(focuscube_data_t *data)
-{
-    memset(data, 0, sizeof(*data));
-    data->lux = -1;
-    data->focus_minutes = -1;
-    data->pomodoro_count = -1;
-    data->remaining_seconds = -1;
-    data->battery_pct = -1;
-    snprintf(data->light_label, sizeof(data->light_label), "%s", "--");
-    snprintf(data->s3_summary, sizeof(data->s3_summary), "%s", "等待状态数据");
-    snprintf(data->report, sizeof(data->report), "%s", "等待 AI 复盘数据");
-    snprintf(data->suggestion, sizeof(data->suggestion), "%s", "等待建议");
-    snprintf(data->reminders, sizeof(data->reminders), "%s", "等待提醒数据");
-}
-
-static bool copy_json_string(char *dst, size_t dst_size, cJSON *obj, const char *key)
-{
-    cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
-
-    if (cJSON_IsString(item) && item->valuestring != NULL) {
-        snprintf(dst, dst_size, "%s", item->valuestring);
-        return true;
-    }
-
-    return false;
-}
-
-static bool json_measurement_is_valid(cJSON *obj)
-{
-    cJSON *valid = cJSON_GetObjectItemCaseSensitive(obj, "valid");
-    return !cJSON_IsBool(valid) || cJSON_IsTrue(valid);
-}
-
-static bool get_json_int(cJSON *obj, const char *key, int *out)
-{
-    cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
-
-    if (!cJSON_IsNumber(item)) {
-        return false;
-    }
-
-    *out = (int)item->valuedouble;
-    return true;
 }
 
 static void dashboard_set_badge(const char *text, lv_color_t color)
@@ -256,7 +190,13 @@ static void dashboard_apply_live_data(const focuscube_data_t *data)
     }
 
     if (s_reminder_label != NULL) {
-        lv_label_set_text(s_reminder_label, data->reminders);
+        const char *current = lv_label_get_text(s_reminder_label);
+        if (strcmp(current, data->reminders) != 0) {
+            lv_label_set_text(s_reminder_label, data->reminders);
+            if (s_reminder_scroll != NULL) {
+                lv_obj_scroll_to_y(s_reminder_scroll, 0, LV_ANIM_OFF);
+            }
+        }
     }
 
     if (s_footer_label != NULL) {
@@ -626,225 +566,26 @@ static bool focuscube_http_get(const char *path, char *body, size_t body_size)
     return true;
 }
 
-static bool focuscube_parse_status(const char *json, focuscube_data_t *data)
-{
-    cJSON *root = cJSON_Parse(json);
-    if (root == NULL) {
-        return false;
-    }
-
-    bool parsed = false;
-    cJSON *devices = cJSON_GetObjectItemCaseSensitive(root, "devices");
-
-    if (cJSON_IsArray(devices)) {
-        cJSON *device = NULL;
-
-        cJSON_ArrayForEach(device, devices) {
-            cJSON *device_id = cJSON_GetObjectItemCaseSensitive(device, "device_id");
-            bool is_s3 = cJSON_IsString(device_id) && device_id->valuestring != NULL &&
-                         strcmp(device_id->valuestring, CONFIG_FOCUSCUBE_DEVICE_ID) == 0;
-
-            if (!is_s3) {
-                continue;
-            }
-
-            cJSON *online = cJSON_GetObjectItemCaseSensitive(device, "online");
-            data->has_s3_online = cJSON_IsBool(online);
-            data->s3_online = cJSON_IsTrue(online);
-            data->light_valid = false;
-            data->imu_valid = false;
-            data->focus_valid = false;
-            data->power_valid = false;
-            snprintf(data->device_id, sizeof(data->device_id), "%s", device_id->valuestring);
-            copy_json_string(data->s3_summary, sizeof(data->s3_summary), device, "summary");
-
-            cJSON *light = cJSON_GetObjectItemCaseSensitive(device, "light");
-            if (cJSON_IsObject(light)) {
-                data->light_valid = json_measurement_is_valid(light);
-                cJSON *lux = cJSON_GetObjectItemCaseSensitive(light, "lux");
-                if (data->light_valid && cJSON_IsNumber(lux)) {
-                    data->lux = (int)(lux->valuedouble + 0.5);
-                }
-
-                cJSON *label = cJSON_GetObjectItemCaseSensitive(light, "label");
-                if (data->light_valid && cJSON_IsString(label) && label->valuestring != NULL) {
-                    const char *display_label = label->valuestring;
-                    if (strcmp(display_label, "too_dim") == 0) {
-                        display_label = "偏暗";
-                    } else if (strcmp(display_label, "too_bright") == 0) {
-                        display_label = "过亮";
-                    } else if (strcmp(display_label, "suitable") == 0) {
-                        display_label = "适宜";
-                    }
-                    snprintf(data->light_label, sizeof(data->light_label), "%s", display_label);
-                }
-            }
-
-            cJSON *imu = cJSON_GetObjectItemCaseSensitive(device, "imu");
-            data->imu_valid = cJSON_IsObject(imu) && json_measurement_is_valid(imu);
-
-            cJSON *focus = cJSON_GetObjectItemCaseSensitive(device, "focus");
-            if (cJSON_IsObject(focus)) {
-                data->focus_valid = json_measurement_is_valid(focus);
-                if (data->focus_valid) {
-                    copy_json_string(data->focus_state, sizeof(data->focus_state), focus, "state");
-                    get_json_int(focus, "remaining_s", &data->remaining_seconds);
-                    get_json_int(focus, "session_count", &data->pomodoro_count);
-                }
-            }
-
-            cJSON *power = cJSON_GetObjectItemCaseSensitive(device, "power");
-            if (cJSON_IsObject(power)) {
-                data->power_valid = json_measurement_is_valid(power);
-                if (data->power_valid) {
-                    get_json_int(power, "battery_pct", &data->battery_pct);
-                    cJSON *charging = cJSON_GetObjectItemCaseSensitive(power, "charging");
-                    data->charging = cJSON_IsTrue(charging);
-                }
-            }
-
-            parsed = true;
-            break;
-        }
-    }
-
-    cJSON_Delete(root);
-    return parsed;
-}
-
-static bool focuscube_parse_report(const char *json, focuscube_data_t *data)
-{
-    cJSON *root = cJSON_Parse(json);
-    if (root == NULL) {
-        return false;
-    }
-
-    bool parsed = copy_json_string(data->report, sizeof(data->report), root, "report_text");
-
-    cJSON *suggestions = cJSON_GetObjectItemCaseSensitive(root, "suggestions");
-    if (cJSON_IsArray(suggestions) && cJSON_GetArraySize(suggestions) > 0) {
-        cJSON *first = cJSON_GetArrayItem(suggestions, 0);
-        if (cJSON_IsString(first) && first->valuestring != NULL) {
-            snprintf(data->suggestion, sizeof(data->suggestion), "%s", first->valuestring);
-            parsed = true;
-        }
-    }
-
-    cJSON *metrics = cJSON_GetObjectItemCaseSensitive(root, "metrics");
-    if (cJSON_IsObject(metrics)) {
-        int value;
-
-        if (data->lux < 0 && get_json_int(metrics, "avg_lux", &value)) {
-            data->lux = value;
-            snprintf(data->light_label, sizeof(data->light_label), "%s", "avg");
-            parsed = true;
-        }
-
-        if (get_json_int(metrics, "focus_minutes", &value)) {
-            data->focus_minutes = value;
-            parsed = true;
-        }
-
-        if (get_json_int(metrics, "pomodoro_count", &value)) {
-            data->pomodoro_count = value;
-            parsed = true;
-        }
-    }
-
-    cJSON_Delete(root);
-    return parsed;
-}
-
-static bool focuscube_parse_reminders(const char *json, focuscube_data_t *data)
-{
-    cJSON *root = cJSON_Parse(json);
-    if (root == NULL) {
-        return false;
-    }
-
-    cJSON *items = root;
-    if (!cJSON_IsArray(items)) {
-        items = cJSON_GetObjectItemCaseSensitive(root, "reminders");
-    }
-    if (!cJSON_IsArray(items)) {
-        items = cJSON_GetObjectItemCaseSensitive(root, "items");
-    }
-
-    bool parsed = false;
-    if (cJSON_IsArray(items)) {
-        struct {
-            int priority;
-            char text[160];
-        } top[3] = {
-            {.priority = -1},
-            {.priority = -1},
-            {.priority = -1},
-        };
-
-        cJSON *item = NULL;
-        cJSON_ArrayForEach(item, items) {
-            cJSON *text = cJSON_GetObjectItemCaseSensitive(item, "text");
-            cJSON *priority = cJSON_GetObjectItemCaseSensitive(item, "priority");
-            if (!cJSON_IsString(text) || text->valuestring == NULL) {
-                continue;
-            }
-
-            int value = cJSON_IsNumber(priority) ? (int)priority->valuedouble : 0;
-            int insert_at = -1;
-            for (int i = 0; i < 3; i++) {
-                if (value > top[i].priority) {
-                    insert_at = i;
-                    break;
-                }
-            }
-            if (insert_at < 0) {
-                continue;
-            }
-
-            for (int i = 2; i > insert_at; i--) {
-                top[i] = top[i - 1];
-            }
-            top[insert_at].priority = value;
-            snprintf(top[insert_at].text, sizeof(top[insert_at].text), "%s", text->valuestring);
-        }
-
-        data->reminders[0] = '\0';
-        size_t used = 0;
-        int shown = 0;
-        for (int i = 0; i < 3 && top[i].priority >= 0; i++) {
-            int written = snprintf(data->reminders + used, sizeof(data->reminders) - used,
-                                   "%d. [P%d] %s%s", i + 1, top[i].priority, top[i].text,
-                                   i < 2 && top[i + 1].priority >= 0 ? "\n" : "");
-            if (written < 0 || (size_t)written >= sizeof(data->reminders) - used) {
-                break;
-            }
-            used += (size_t)written;
-            shown++;
-        }
-
-        if (shown == 0) {
-            snprintf(data->reminders, sizeof(data->reminders), "%s", "暂无提醒");
-        }
-        parsed = true;
-    }
-
-    cJSON_Delete(root);
-    return parsed;
-}
-
 static bool focuscube_fetch_status(focuscube_data_t *data)
 {
     char body[FOCUSCUBE_HTTP_BODY_MAX];
-    return focuscube_http_get("/api/v1/status", body, sizeof(body)) &&
-           focuscube_parse_status(body, data);
+    char path[192];
+    snprintf(path, sizeof(path), "/api/v1/status?device_id=%s", CONFIG_FOCUSCUBE_DEVICE_ID);
+    bool ok = focuscube_http_get(path, body, sizeof(body)) &&
+              focuscube_parse_status(body, data);
+    if (ok) {
+        ESP_LOGI(TAG, "status parsed: device=%s online=%d lux=%d label=%s",
+                 data->device_id, data->s3_online, data->lux, data->light_label);
+    }
+    return ok;
 }
 
 static bool focuscube_fetch_report(focuscube_data_t *data)
 {
     char body[FOCUSCUBE_HTTP_BODY_MAX];
     char path[192];
-    snprintf(path, sizeof(path), "/api/v1/report/daily?device_id=%s&date=%s",
-             CONFIG_FOCUSCUBE_DEVICE_ID, CONFIG_FOCUSCUBE_REPORT_DATE);
+    snprintf(path, sizeof(path), "/api/v1/report/daily?device_id=%s",
+             CONFIG_FOCUSCUBE_DEVICE_ID);
     return focuscube_http_get(path, body, sizeof(body)) &&
            focuscube_parse_report(body, data);
 }
@@ -1068,7 +809,20 @@ static void focuscube_dashboard_create(void)
                                  &focuscube_font_cn_18, lv_color_hex(0x1f2937));
 
     lv_obj_t *reminder_card = create_card(scr, 36, 390, 448, 134, "提醒", lv_color_hex(0xf59e0b));
-    s_reminder_label = create_text(reminder_card, "等待提醒数据", 24, 58, 386,
+    s_reminder_scroll = lv_obj_create(reminder_card);
+    lv_obj_set_pos(s_reminder_scroll, 20, 54);
+    lv_obj_set_size(s_reminder_scroll, 414, 70);
+    lv_obj_set_style_bg_opa(s_reminder_scroll, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_reminder_scroll, 0, 0);
+    lv_obj_set_style_pad_all(s_reminder_scroll, 0, 0);
+    lv_obj_set_style_radius(s_reminder_scroll, 0, 0);
+    lv_obj_set_scroll_dir(s_reminder_scroll, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(s_reminder_scroll, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_style_width(s_reminder_scroll, 5, LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_color(s_reminder_scroll, lv_color_hex(0xf59e0b), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(s_reminder_scroll, LV_OPA_60, LV_PART_SCROLLBAR);
+
+    s_reminder_label = create_text(s_reminder_scroll, "等待提醒数据", 4, 0, 386,
                                    &focuscube_font_cn_18, lv_color_hex(0x1f2937));
 
     s_footer_label = create_text(scr, "", 38, 550, 900, &focuscube_font_cn_18, lv_color_hex(0x687386));
