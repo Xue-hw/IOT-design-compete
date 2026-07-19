@@ -1,0 +1,19 @@
+.DS_Store
+**/.DS_Store
+**/sdkconfig
+**/sdkconfig.old
+**/build/
+**/managed_components/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/.env
+**/data/*.db
+**/data/*.db-shm
+**/data/*.db-wal
+
+# Local archives and generated acceptance output are reproducible, not source.
+/*.zip
+**/docs/acceptance_result.json
+**/examples/telemetry_now.json

@@ -1,0 +1,73 @@
+menu "FocusCube P4 Configuration"
+
+    config FOCUSCUBE_WIFI_SSID
+        string "WiFi SSID"
+        default "BUPT-portal"
+        help
+            WiFi network name used by the P4 display. Leave empty to keep the
+            local mock dashboard running without network access.
+
+    config FOCUSCUBE_WIFI_PASSWORD
+        string "WiFi Password"
+        default ""
+        help
+            WiFi password. Leave empty for an open network.
+
+    config FOCUSCUBE_WIFI_MAXIMUM_RETRY
+        int "Maximum WiFi retry count"
+        default 5
+
+    config FOCUSCUBE_BUPT_PORTAL_ENABLE
+        bool "Enable BUPT captive portal login"
+        default y
+        help
+            Connect to the open BUPT-portal SSID, discover the captive portal
+            redirect and cookie, then submit the campus-network credentials.
+
+    config FOCUSCUBE_BUPT_ACCOUNT
+        string "BUPT portal account"
+        default ""
+        depends on FOCUSCUBE_BUPT_PORTAL_ENABLE
+        help
+            Enter locally with menuconfig. Do not commit or share sdkconfig.
+
+    config FOCUSCUBE_BUPT_PASSWORD
+        string "BUPT portal password"
+        default ""
+        depends on FOCUSCUBE_BUPT_PORTAL_ENABLE
+        help
+            Enter locally with menuconfig. The upstream campus portal uses
+            plain HTTP, so use only on the trusted campus network.
+
+    config FOCUSCUBE_BUPT_LOGIN_URL
+        string "BUPT portal login URL"
+        default "http://10.3.8.216/login"
+        depends on FOCUSCUBE_BUPT_PORTAL_ENABLE
+
+    config FOCUSCUBE_BUPT_PROBE_URL
+        string "BUPT portal redirect probe URL"
+        default "http://connectivitycheck.gstatic.com/generate_204"
+        depends on FOCUSCUBE_BUPT_PORTAL_ENABLE
+
+    config FOCUSCUBE_BACKEND_BASE_URL
+        string "Backend base URL"
+        default "http://82.156.238.244/focuscube"
+        help
+            Production FocusCube API base URL. Override this only when testing
+            against a backend running on the same reachable local network.
+
+    config FOCUSCUBE_DEVICE_ID
+        string "Displayed acquisition device id"
+        default "focuscube-c3-proxy-01"
+        help
+            Single source of truth for the device shown by status, report and
+            reminder requests. The C3 proxy id is a temporary light-source
+            trace id, not a third product node. Keep it until EYE testing is
+            complete, then use the formally assigned EYE or Cube id. Only one
+            primary device is expected online at a time.
+
+    config FOCUSCUBE_HTTP_TIMEOUT_MS
+        int "HTTP timeout in milliseconds"
+        default 3000
+
+endmenu
