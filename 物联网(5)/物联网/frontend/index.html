@@ -94,7 +94,7 @@
         <article class="simulation-console live-api-console panel" id="simulationConsole">
           <div class="console-title"><span class="pulse-dot" id="liveMonitorPulse"></span><div><p class="section-kicker">REAL API STREAM</p><h3>真实接口动态通道</h3></div></div>
           <div class="live-api-grid">
-            <div><span>统一后端地址</span><code id="fixedApiUrl">http://192.168.1.165:8000</code></div>
+            <div><span>统一后端地址</span><code id="fixedApiUrl">http://82.156.238.244/focuscube</code></div>
             <div><span>状态刷新</span><strong id="streamRate">status 每 2 秒</strong></div>
             <div><span>valid 兼容规则</span><strong id="validRuleState">等待设备状态</strong></div>
             <div><span>展示原则</span><strong>不生成占位字段</strong></div>
@@ -217,11 +217,11 @@
       <div class="modal-head"><div><p class="section-kicker">FIXED CONNECTION</p><h2>统一接口与刷新策略</h2></div><button id="closeSettingsBtn" class="icon-btn" type="button">×</button></div>
       <div class="form-grid">
         <label><span>数据模式</span><select id="modeSelect" disabled><option value="live">仅真实接口</option></select></label>
-        <label><span>后端基础地址</span><input id="baseUrlInput" type="url" value="http://192.168.1.165:8000" readonly /><small>同源运行时自动使用当前后端；单独运行时默认使用 192.168.1.165。</small></label>
+        <label><span>后端基础地址</span><input id="baseUrlInput" type="url" value="http://82.156.238.244/focuscube" readonly /><small>同源运行时自动使用当前后端；单独运行时默认使用已部署的云端入口。</small></label>
         <label><span>状态刷新间隔</span><select id="refreshIntervalSelect" disabled><option value="2">2 秒</option></select></label>
         <label class="check-label"><input id="autoFallbackCheck" type="checkbox" disabled /><span>接口失败时不生成占位 telemetry</span></label>
       </div>
-      <div class="modal-test" id="modalTestResult">固定接口：http://192.168.1.165:8000</div>
+      <div class="modal-test" id="modalTestResult">固定接口：http://82.156.238.244/focuscube</div>
       <div class="modal-actions"><button class="secondary-btn" id="testConnectionBtn" type="button">测试 /api/v1/status</button><button class="primary-btn" id="saveSettingsBtn" type="button">关闭并刷新</button></div>
     </div>
   </div>

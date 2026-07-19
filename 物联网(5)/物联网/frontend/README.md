@@ -2,7 +2,15 @@
 
 本目录是成员 D 负责的 Web 看板与总集成展示层，已与成员 C 的 `pc_backend` 合并到同一 GitHub 项目中。浏览器端不保存大模型 API Key，不直接调用云端模型，也不修改 S3/P4 固件。
 
-## 推荐启动方式：与后端同源运行
+## 在线入口
+
+当前生产环境已经由后端同源托管：
+
+```text
+http://82.156.238.244/focuscube/dashboard/
+```
+
+## 本地与后端同源运行
 
 先启动后端：
 
@@ -12,10 +20,10 @@ python -m pip install -r requirements.txt
 python run.py
 ```
 
-然后在同一局域网中打开：
+然后打开：
 
 ```text
-http://192.168.1.165:8000/dashboard/
+http://127.0.0.1:8000/dashboard/
 ```
 
 通过 `/dashboard/` 打开时，前端自动使用当前后端同源地址，请求：
@@ -27,7 +35,7 @@ GET /api/v1/reminders?device_id=&since=
 GET /api/v1/timeseries?device_id=&date=&metric=
 ```
 
-这种方式不依赖旧的 `10.129.90.92` 地址，也不需要额外处理跨域。
+同源运行不需要额外处理跨域，也不依赖成员电脑的固定局域网 IP。
 
 ## 单独运行前端
 
@@ -43,7 +51,7 @@ python serve.py --port 5173
 http://127.0.0.1:5173
 ```
 
-单独运行时默认连接 `http://192.168.1.165:8000`。临时联调其他后端可使用 URL 参数：
+单独运行时默认连接 `http://82.156.238.244/focuscube`。临时联调其他后端可使用 URL 参数：
 
 ```text
 http://127.0.0.1:5173/?api=http://其他IP:8000

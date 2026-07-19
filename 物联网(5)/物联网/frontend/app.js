@@ -6,7 +6,7 @@
   const backendHostedBase = dashboardPathIndex >= 0
     ? `${window.location.origin}${window.location.pathname.slice(0, dashboardPathIndex)}`
     : null;
-  const API_BASE = (queryApiBase || backendHostedBase || "http://192.168.1.165:8000").replace(/\/$/, "");
+  const API_BASE = (queryApiBase || backendHostedBase || "http://82.156.238.244/focuscube").replace(/\/$/, "");
   const API_PATHS = {
     status: "/api/v1/status",
     report: "/api/v1/report/daily",

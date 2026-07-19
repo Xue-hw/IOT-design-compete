@@ -99,7 +99,7 @@ SLEEP：GPIO41 拉低，传感器域断电（MCU/IMU/SD 常开）
 |---|---|
 | BMI270 I2C 地址 | 默认 0x68，取决于 SDO 引脚接地/接高，可能需要改为 0x69 |
 | OV2640 SCCB 地址 | 默认 0x30，摄像头驱动可能需要确认 |
-| SD 卡速率 | 20MHz 已验证 6 轮稳定（写 475 KB/s，读 915 KB/s，1-bit 模式）。config.h `SD_MAX_FREQ_KHZ` 可降速。详见 `../05_测试记录/SD卡测试报告.md` |
+| SD 卡速率 | 20MHz 已验证 6 轮稳定（写 475 KB/s，读 915 KB/s，1-bit 模式）。config.h `SD_MAX_FREQ_KHZ` 可降速。详见 `../05_测试记录/S3_EYE/SD卡测试报告.md` |
 | SD 卡 1-bit D3 上拉 | 卡侧 D3 必须有 10kΩ 外部上拉到 3V3，否则卡进 SPI 模式导致 mount 失败 |
 
 ---

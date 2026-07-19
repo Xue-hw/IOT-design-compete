@@ -9,7 +9,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-API = "http://192.168.1.165:8000"
+API = "http://82.156.238.244/focuscube"
 
 
 def inline_app() -> str:
@@ -33,6 +33,7 @@ def series(metric: str) -> dict:
 
 
 def main() -> None:
+    (ROOT / "preview").mkdir(exist_ok=True)
     status_calls = {"count": 0}
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, executable_path="/usr/bin/chromium", args=["--no-sandbox"])

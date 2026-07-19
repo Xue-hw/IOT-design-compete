@@ -18,3 +18,7 @@
 /*.zip
 **/docs/acceptance_result.json
 **/examples/telemetry_now.json
+
+# Generated Web previews and local flash recovery images stay out of Git.
+**/frontend/preview/
+**/固件备份/*.bin
