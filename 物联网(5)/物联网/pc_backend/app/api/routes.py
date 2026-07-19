@@ -131,6 +131,28 @@ def get_status(
             <= int(config["online_timeout_s"])
         )
 
+        light = {
+            "lux": row["lux"],
+            "label": row["light_label"],
+        }
+        imu = {
+            "valid": bool(row["imu_valid"]),
+            "face": row["face"],
+            "mode": row["mode"],
+            "activity": row["activity"],
+        }
+        focus = {
+            "valid": bool(row["focus_valid"]),
+            "state": row["focus_state"],
+            "remaining_s": row["remaining_s"],
+            "session_count": row["session_count"],
+        }
+        power = {
+            "valid": bool(row["power_valid"]),
+            "battery_pct": row["battery_pct"],
+            "charging": bool(row["charging"]),
+        }
+
         devices.append(
             {
                 "device_id": row["device_id"],
@@ -142,42 +164,21 @@ def get_status(
                 ),
                 "data_ts": int(row["ts"]),
                 "summary": _summary(row),
-                "light": {
-                    "lux": row["lux"],
-                    "label": row["light_label"],
-                },
-                "imu": {
-                    "valid": bool(
-                        row["imu_valid"]
-                    ),
-                    "face": row["face"],
-                    "mode": row["mode"],
-                    "activity": row["activity"],
-                },
-                "focus": {
-                    "valid": bool(
-                        row["focus_valid"]
-                    ),
-                    "state": row[
-                        "focus_state"
-                    ],
-                    "remaining_s": row[
-                        "remaining_s"
-                    ],
-                    "session_count": row[
-                        "session_count"
-                    ],
-                },
-                "power": {
-                    "valid": bool(
-                        row["power_valid"]
-                    ),
-                    "battery_pct": row[
-                        "battery_pct"
-                    ],
-                    "charging": bool(
-                        row["charging"]
-                    ),
+                # Keep the original top-level groups for P4 and existing
+                # integrations.
+                "light": light,
+                "imu": imu,
+                "focus": focus,
+                "power": power,
+                # D's Web dashboard consumes the same real values through a
+                # nested compatibility object. Per-group valid flags remain
+                # authoritative for subsystems that have not reported data.
+                "telemetry": {
+                    "valid": True,
+                    "light": light,
+                    "imu": imu,
+                    "focus": focus,
+                    "power": power,
                 },
             }
         )
@@ -275,6 +276,7 @@ def get_timeseries(
         "focus.remaining_s": "remaining_s",
         "session_count": "session_count",
         "focus.session_count": "session_count",
+        "focus.state": "focus_state",
     }
 
     if metric not in allowed:
@@ -307,6 +309,7 @@ def get_timeseries(
         "focus.remaining_s": "focus_valid",
         "session_count": "focus_valid",
         "focus.session_count": "focus_valid",
+        "focus.state": "focus_valid",
         "battery_pct": "power_valid",
         "power.battery_pct": "power_valid",
     }
@@ -321,6 +324,35 @@ def get_timeseries(
             for row in rows
             if bool(row[validity_column])
         ]
+
+    if metric == "focus.state":
+        segments: list[dict[str, Any]] = []
+        for row in rows:
+            ts = int(row["ts"])
+            state_value = str(row["focus_state"])
+            if segments and segments[-1]["state"] == state_value:
+                segments[-1]["end"] = max(
+                    segments[-1]["end"], ts + 1
+                )
+            else:
+                if segments:
+                    segments[-1]["end"] = max(
+                        segments[-1]["end"], ts
+                    )
+                segments.append(
+                    {
+                        "start": ts,
+                        "end": ts + 1,
+                        "state": state_value,
+                    }
+                )
+
+        return {
+            "device_id": device_id,
+            "date": report_date.isoformat(),
+            "metric": metric,
+            "segments": segments,
+        }
 
     database_column = allowed[metric]
 

@@ -44,6 +44,8 @@
 - `product_node`：是否为产品主设备；C3 临时代理为 `false`。
 - `device_role`：`primary_device` 或 `sensor_proxy`。
 - `physical_source`：原样保留上传时的 `source`，用于追踪 AS7341/C3 链路。
+- 顶层 `light/imu/focus/power`：继续供 P4 和已有调用方使用。
+- `telemetry`：D 端 Web 看板兼容对象，内部复用上述四组数据；`imu/focus/power.valid=false` 表示该子系统当前只是占位数据。
 
 ## 3. GET `/api/v1/report/daily`
 
@@ -66,8 +68,11 @@
 参数：`device_id`、`date`、`metric`。`metric` 可取：
 
 ```text
-lux / activity / battery_pct / remaining_s / session_count
+lux / light.lux / activity / imu.activity / battery_pct / power.battery_pct
+remaining_s / focus.remaining_s / session_count / focus.session_count / focus.state
 ```
+
+`focus.state` 返回 `segments`，每段包含 `start`、`end` 和 `state`；其他指标返回 `points`。
 
 ## 6. GET/PUT `/api/v1/config`
 

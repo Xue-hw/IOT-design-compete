@@ -56,6 +56,8 @@ def test_status_reflects_latest_telemetry(tmp_path: Path) -> None:
     assert device["light"]["lux"] == 235.6
     assert device["focus"]["remaining_s"] == 940
     assert device["power"]["battery_pct"] == 78
+    assert device["telemetry"]["valid"] is True
+    assert device["telemetry"]["light"]["lux"] == 235.6
 
 
 def test_c3_proxy_is_not_exposed_as_a_product_node(tmp_path: Path) -> None:
@@ -139,6 +141,17 @@ def test_timeseries_and_config(tmp_path: Path) -> None:
     assert series.status_code == 200
     assert series.json()["points"][0]["value"] == 235.6
 
+    focus_series = client.get(
+        "/api/v1/timeseries",
+        params={
+            "device_id": SAMPLE["device_id"],
+            "date": report_date,
+            "metric": "focus.state",
+        },
+    )
+    assert focus_series.status_code == 200
+    assert focus_series.json()["segments"][0]["state"] == "running"
+
     config = client.put(
         "/api/v1/config",
         params={"device_id": SAMPLE["device_id"]},
@@ -146,6 +159,13 @@ def test_timeseries_and_config(tmp_path: Path) -> None:
     )
     assert config.status_code == 200
     assert config.json()["light_min_lux"] == 180
+
+
+def test_dashboard_is_served_from_backend(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    response = client.get("/dashboard/")
+    assert response.status_code == 200
+    assert "FocusCube" in response.text
 
 
 def test_ai_gateway_openai_compatible_call(monkeypatch) -> None:

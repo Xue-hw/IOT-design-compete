@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="FocusCube AIoT 智能光环境与专注管理实时看板" />
+  <title>FocusCube 实时智能看板</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="ambient-grid" aria-hidden="true"></div>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48"><path d="M24 3 42 13.5v21L24 45 6 34.5v-21L24 3Z"/><path d="m24 3 18 10.5L24 24 6 13.5 24 3Z"/><path d="M24 24v21"/></svg>
+        </div>
+        <div><strong>FocusCube</strong><span>AIoT 专注管理系统</span></div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item active" data-page="overview" type="button"><span class="nav-icon">⌂</span><span>实时总览</span><i class="nav-live"></i></button>
+        <button class="nav-item" data-page="trends" type="button"><span class="nav-icon">⌁</span><span>数据流监测</span></button>
+        <button class="nav-item" data-page="report" type="button"><span class="nav-icon">✦</span><span>AI 动态复盘</span></button>
+        <button class="nav-item" data-page="diagnostics" type="button"><span class="nav-icon">⚙</span><span>联调诊断</span></button>
+      </nav>
+
+      <div class="side-live-card">
+        <div class="side-live-head"><span class="pulse-dot"></span><b>系统运行中</b></div>
+        <strong id="sideClock">--:--:--</strong>
+        <div class="side-live-row"><span>状态轮询</span><b id="frameCounter">0</b></div>
+        <div class="side-live-row"><span>数据来源</span><b id="sideScene">等待连接</b></div>
+      </div>
+
+      <div class="sidebar-foot">
+        <div class="mini-flow"><span>S3</span><i></i><span>Backend</span><i></i><span>AI</span><i></i><span>P4/Web</span></div>
+        <p>结构化感知数据实时融合<br>浏览器端不保存模型密钥</p>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">FOCUSCUBE REAL-TIME CONTROL CENTER</p>
+          <h1 id="pageTitle">实时总览</h1>
+        </div>
+        <div class="top-actions">
+          <label class="compact-field"><span>设备</span><select id="deviceSelect"><option value="focuscube-s3-01">focuscube-s3-01</option></select></label>
+          <label class="compact-field"><span>日期</span><input id="dateInput" type="date" /></label>
+          <div class="connection-chip loading" id="connectionChip"><span class="status-dot"></span><span id="connectionText">正在连接</span><em id="latencyText">-- ms</em></div>
+          <button class="icon-btn" id="refreshBtn" type="button" title="立即同步">↻</button>
+          <button class="secondary-btn" id="presentationBtn" type="button">演示模式</button>
+          <button class="primary-btn" id="settingsBtn" type="button">固定接口</button>
+        </div>
+      </header>
+
+      <div id="fallbackBanner" class="banner warning hidden" role="status">
+        <strong>真实接口暂不可用</strong><span>页面不会生成本地占位遥测，恢复连接后会自动更新。</span><button id="dismissBanner" type="button">×</button>
+      </div>
+
+      <section class="page active" id="page-overview">
+        <article class="hero-card">
+          <div class="hero-copy">
+            <div class="live-label"><span></span> LIVE TELEMETRY · <b id="heroLiveTime">--:--:--</b></div>
+            <h2 id="heroSummary">正在接收设备数据…</h2>
+            <p id="heroSubtext">系统正在建立 S3、后端、云端模型与 P4/Web 之间的数据闭环。</p>
+            <div class="hero-tags">
+              <span id="lightTag">光照 --</span><span id="focusTag">专注 --</span><span id="batteryTag">电量 --</span><span id="syncTag">同步 --</span>
+            </div>
+            <div class="telemetry-strip" id="telemetryStrip">
+              <div><span>lux</span><b id="stripLux">--</b><i class="strip-bar"><em id="stripLuxBar"></em></i></div>
+              <div><span>activity</span><b id="stripActivity">--</b><i class="strip-bar"><em id="stripActivityBar"></em></i></div>
+              <div><span>battery</span><b id="stripBattery">--</b><i class="strip-bar"><em id="stripBatteryBar"></em></i></div>
+            </div>
+          </div>
+
+          <div class="hero-session">
+            <div class="countdown-ring" id="countdownRing">
+              <div><strong id="countdownValue">--:--</strong><span id="countdownState">等待计时</span></div>
+            </div>
+            <div class="session-meta"><span>当前轮次</span><b id="currentSession">--</b></div>
+          </div>
+
+          <div class="cube-stage" aria-label="根据 IMU 状态动态旋转的 FocusCube">
+            <div class="cube-orbit orbit-one"></div><div class="cube-orbit orbit-two"></div>
+            <div class="cube-3d" id="cube3d">
+              <div class="cube-side front">FOCUS</div><div class="cube-side back">BREAK</div><div class="cube-side right">AI</div><div class="cube-side left">S3</div><div class="cube-side top">LIGHT</div><div class="cube-side bottom">P4</div>
+            </div>
+            <span class="cube-caption" id="cubeCaption">IMU FACE --</span>
+          </div>
+        </article>
+
+        <article class="simulation-console live-api-console panel" id="simulationConsole">
+          <div class="console-title"><span class="pulse-dot" id="liveMonitorPulse"></span><div><p class="section-kicker">REAL API STREAM</p><h3>真实接口动态通道</h3></div></div>
+          <div class="live-api-grid">
+            <div><span>统一后端地址</span><code id="fixedApiUrl">http://192.168.1.165:8000</code></div>
+            <div><span>状态刷新</span><strong id="streamRate">status 每 2 秒</strong></div>
+            <div><span>valid 兼容规则</span><strong id="validRuleState">等待设备状态</strong></div>
+            <div><span>展示原则</span><strong>不生成占位字段</strong></div>
+          </div>
+          <div class="valid-rule-flow">
+            <span><b>valid 缺省</b><small>按 true 处理</small></span><i></i><span><b>valid:false</b><small>等待真实数据</small></span><i></i><span><b>valid:true</b><small>恢复正常展示</small></span>
+          </div>
+          <div class="console-status"><span>真实接口轮询</span><i></i><span id="sceneCountdown">下一次状态刷新约 2 秒</span></div>
+        </article>
+
+        <div class="metric-grid" id="metricGrid">
+          <article class="metric-card" data-metric="lux"><div class="metric-icon sun">☀</div><div><span>实时照度</span><strong id="metricLux">--</strong><small>lux</small></div><p id="metricLuxHint">等待数据</p><div class="metric-delta" id="luxDelta">--</div><svg class="sparkline" id="luxSparkline"></svg></article>
+          <article class="metric-card" data-metric="focus"><div class="metric-icon focus">◉</div><div><span>今日专注</span><strong id="metricFocus">--</strong><small>min</small></div><p id="metricFocusHint">等待数据</p><div class="metric-delta" id="focusDelta">实时累计</div><svg class="sparkline" id="focusSparkline"></svg></article>
+          <article class="metric-card" data-metric="activity"><div class="metric-icon cycle">⌁</div><div><span>活动度</span><strong id="metricActivity">--</strong><small>/ 1</small></div><p id="metricActivityHint">等待数据</p><div class="metric-delta" id="activityDelta">--</div><svg class="sparkline" id="activitySparkline"></svg></article>
+          <article class="metric-card" data-metric="ratio"><div class="metric-icon ratio">✓</div><div><span>适宜光照占比</span><strong id="metricRatio">--</strong><small>%</small></div><p id="metricRatioHint">等待数据</p><div class="metric-delta" id="ratioDelta">动态统计</div><svg class="sparkline" id="batterySparkline"></svg></article>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="panel chart-panel">
+            <div class="panel-head"><div><p class="section-kicker">STREAMING ENVIRONMENT</p><h3>实时光照数据流</h3></div><div class="live-badge"><span></span> STREAMING</div></div>
+            <div class="chart-wrap" id="overviewLuxChart"></div>
+            <div class="chart-foot"><span>绿色区域：300–500 lux 建议区间</span><strong id="latestLuxText">最新 -- lux</strong></div>
+          </article>
+
+          <article class="panel event-panel">
+            <div class="panel-head"><div><p class="section-kicker">EVENT STREAM</p><h3>系统实时事件</h3></div><span class="count-badge" id="eventCount">0 条</span></div>
+            <div class="event-stream" id="eventStream"></div>
+          </article>
+
+          <article class="panel device-panel">
+            <div class="panel-head"><div><p class="section-kicker">DEVICES</p><h3>设备心跳状态</h3></div><span class="count-badge" id="onlineCount">0 / 0 在线</span></div>
+            <div id="deviceList" class="device-list"></div>
+            <div class="heartbeat-track"><i id="heartbeatPulse"></i><span>最近心跳</span><b id="heartbeatText">--</b></div>
+          </article>
+
+          <article class="panel ai-panel">
+            <div class="panel-head"><div><p class="section-kicker">CLOUD LLM</p><h3>AI 实时分析</h3></div><button class="text-btn" id="regenerateReportBtn" type="button">重新分析</button></div>
+            <div class="ai-progress" id="aiProgress"><div class="ai-progress-head"><span id="aiStage">等待数据</span><b id="aiPercent">0%</b></div><i><em id="aiProgressBar"></em></i></div>
+            <blockquote id="reportText">正在获取基于结构化感知数据生成的中文复盘…</blockquote>
+            <div id="suggestionList" class="suggestion-list"></div>
+            <div class="evidence-row" id="evidenceRow"></div>
+          </article>
+
+          <article class="panel reminder-panel">
+            <div class="panel-head"><div><p class="section-kicker">DOWNLINK QUEUE</p><h3>动态提醒队列</h3></div><span class="count-badge" id="reminderCount">0 条</span></div>
+            <div id="reminderList" class="reminder-list"></div>
+          </article>
+        </div>
+
+        <article class="panel system-flow-panel">
+          <div class="panel-head"><div><p class="section-kicker">LIVE CLOSED LOOP</p><h3>AIoT 数据闭环</h3></div><span class="flow-state" id="flowState">链路检测中</span></div>
+          <div class="system-flow">
+            <div class="flow-node"><span class="node-wave"></span><b>S3 传感器</b><span>光照 · IMU · 专注 · 电量</span><em id="flowS3">等待</em></div>
+            <div class="flow-arrow"><i><u></u></i><span id="flowTelemetryRate">telemetry</span></div>
+            <div class="flow-node"><span class="node-wave"></span><b>业务后端</b><span>接收 · 存储 · 聚合</span><em id="flowBackend">等待</em></div>
+            <div class="flow-arrow"><i><u></u></i><span>structured prompt</span></div>
+            <div class="flow-node accent"><span class="node-wave"></span><b>云端大模型</b><span>复盘 · 建议 · 提醒</span><em id="flowLLM">等待</em></div>
+            <div class="flow-arrow"><i><u></u></i><span>report / reminder</span></div>
+            <div class="flow-node"><span class="node-wave"></span><b>P4 + Web</b><span>展示 · 响应 · 交互</span><em id="flowDisplay">本页在线</em></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="page" id="page-trends">
+        <article class="trend-toolbar panel">
+          <div><p class="section-kicker">REAL-TIME SENSOR STREAM</p><h2>多源数据流监测</h2><span class="stream-subtitle" id="trendStreamState">持续接收数据中</span></div>
+          <div class="toolbar-actions">
+            <div class="segmented" id="metricTabs"><button class="active" data-metric="light.lux">光照</button><button data-metric="imu.activity">活动度</button><button data-metric="power.battery_pct">电量</button></div>
+            <div class="window-control"><span>窗口</span><button data-window="30">30</button><button class="active" data-window="60">60</button><button data-window="120">120</button></div>
+          </div>
+        </article>
+        <article class="panel large-chart-panel">
+          <div class="panel-head"><div><h3 id="trendChartTitle">光照强度（lux）</h3><p id="trendChartDesc">S3 实时上传的光照结构化数据</p></div><div class="stat-pills" id="trendStats"></div></div>
+          <div class="chart-wrap large" id="trendChart"></div>
+          <div class="data-ticker" id="dataTicker"></div>
+        </article>
+        <div class="sensor-gauge-grid">
+          <article class="panel gauge-panel"><p class="section-kicker">LIGHT</p><div class="mini-gauge" id="luxGauge"><span><b id="gaugeLux">--</b><small>lux</small></span></div><h3>环境照度</h3><p id="gaugeLuxLabel">等待数据</p></article>
+          <article class="panel gauge-panel"><p class="section-kicker">ACTIVITY</p><div class="mini-gauge" id="activityGauge"><span><b id="gaugeActivity">--</b><small>level</small></span></div><h3>姿态活动度</h3><p id="gaugeActivityLabel">等待数据</p></article>
+          <article class="panel gauge-panel"><p class="section-kicker">BATTERY</p><div class="mini-gauge" id="batteryGauge"><span><b id="gaugeBattery">--</b><small>%</small></span></div><h3>设备续航</h3><p id="gaugeBatteryLabel">等待数据</p></article>
+          <article class="panel decision-panel"><p class="section-kicker">FUSION DECISION</p><div class="decision-orb" id="decisionOrb"><span></span><b id="fusionState">计算中</b></div><p id="fusionResult">等待多源数据融合</p><div class="confidence"><span>融合置信度</span><i><em id="confidenceBar"></em></i><b id="confidenceValue">--%</b></div></article>
+        </div>
+        <div class="two-col-grid">
+          <article class="panel"><div class="panel-head"><div><p class="section-kicker">FOCUS TIMELINE</p><h3>动态专注时间线</h3></div><span class="timeline-now" id="timelineNow">NOW --:--</span></div><div id="focusTimeline" class="focus-timeline"></div></article>
+          <article class="panel"><div class="panel-head"><div><p class="section-kicker">CORRELATION</p><h3>实时关联结论</h3></div></div><div class="correlation-list" id="correlationList"></div></article>
+        </div>
+      </section>
+
+      <section class="page" id="page-report">
+        <div class="report-layout">
+          <article class="panel report-main">
+            <div class="report-cover"><div><p class="section-kicker">LIVE DAILY INSIGHT</p><h2>FocusCube 动态智能复盘</h2><p id="reportMeta">-- · focuscube-s3-01</p></div><div class="report-generation-state"><span class="model-orb"></span><b id="reportModelState">云端模型待命</b><button id="reportGenerateBtn" type="button">生成最新复盘</button></div></div>
+            <div class="generation-pipeline" id="generationPipeline"><div data-step="collect"><i>1</i><span>汇聚传感器数据</span></div><b></b><div data-step="aggregate"><i>2</i><span>计算结构化指标</span></div><b></b><div data-step="reason"><i>3</i><span>大模型推理</span></div><b></b><div data-step="deliver"><i>4</i><span>下发报告与提醒</span></div></div>
+            <div class="report-section"><h3>今日综合复盘</h3><p id="fullReportText">等待生成…</p></div>
+            <div class="report-section"><h3>动态行动建议</h3><ol id="fullSuggestionList"></ol></div>
+            <div class="report-section"><h3>模型依据的结构化指标</h3><div class="evidence-table" id="evidenceTable"></div></div>
+            <div class="report-note"><b>实时更新说明</b><span>本页只展示后端真实模型输出和统计结果。valid:false 的字段应由 C 端从日报和统计中忽略，D 端不使用占位遥测补算。</span></div>
+          </article>
+          <aside class="report-side">
+            <article class="panel score-card"><p class="section-kicker">DATA COMPLETENESS</p><div class="score-ring" id="scoreRing"><strong id="dailyScore">--</strong><span>/ 100</span></div><h3 id="scoreLabel">等待日报数据</h3><p id="scoreExplain">仅统计后端实际返回的约定指标字段，不生成业务评分。</p></article>
+            <article class="panel"><div class="panel-head"><div><p class="section-kicker">LIVE REMINDERS</p><h3>提醒历史</h3></div></div><div id="reportReminderList" class="reminder-list compact"></div></article>
+            <article class="panel model-trace-panel"><div class="panel-head"><div><p class="section-kicker">MODEL TRACE</p><h3>生成轨迹</h3></div></div><div id="modelTrace" class="model-trace"></div></article>
+          </aside>
+        </div>
+      </section>
+
+      <section class="page" id="page-diagnostics">
+        <div class="diagnostics-grid">
+          <article class="panel diag-summary"><div class="panel-head"><div><p class="section-kicker">INTEGRATION</p><h3>动态联调状态</h3></div><button class="secondary-btn" id="runDiagnosticsBtn" type="button">重新检测</button></div><div class="diag-result" id="diagResult"><div class="diag-spinner"></div><div><strong>等待检测</strong><p>将逐项请求 D 端依赖的后端接口。</p></div></div></article>
+          <article class="panel api-list-panel"><div class="panel-head"><div><p class="section-kicker">API CONTRACT</p><h3>D 端接口依赖</h3></div><span class="live-badge"><span></span> HEARTBEAT</span></div><div id="apiCheckList" class="api-check-list"></div></article>
+          <article class="panel request-log-panel span-2"><div class="panel-head"><div><p class="section-kicker">REAL API REQUEST LOG</p><h3>实时运行日志</h3></div><button class="text-btn" id="clearLogBtn" type="button">清空</button></div><div class="request-log" id="requestLog"></div></article>
+          <article class="panel span-2 security-note"><div class="security-icon">!</div><div><h3>前后端职责边界</h3><p>浏览器端不保存大模型 API Key，也不直接调用云端模型。D 端通过同源 /dashboard/ 或当前配置的后端地址消费状态、时序、日报和提醒接口。valid:false 时仅显示“等待真实数据”，不显示 face=0、battery=0 等占位值。</p></div></article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="settingsModal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head"><div><p class="section-kicker">FIXED CONNECTION</p><h2>统一接口与刷新策略</h2></div><button id="closeSettingsBtn" class="icon-btn" type="button">×</button></div>
+      <div class="form-grid">
+        <label><span>数据模式</span><select id="modeSelect" disabled><option value="live">仅真实接口</option></select></label>
+        <label><span>后端基础地址</span><input id="baseUrlInput" type="url" value="http://192.168.1.165:8000" readonly /><small>同源运行时自动使用当前后端；单独运行时默认使用 192.168.1.165。</small></label>
+        <label><span>状态刷新间隔</span><select id="refreshIntervalSelect" disabled><option value="2">2 秒</option></select></label>
+        <label class="check-label"><input id="autoFallbackCheck" type="checkbox" disabled /><span>接口失败时不生成占位 telemetry</span></label>
+      </div>
+      <div class="modal-test" id="modalTestResult">固定接口：http://192.168.1.165:8000</div>
+      <div class="modal-actions"><button class="secondary-btn" id="testConnectionBtn" type="button">测试 /api/v1/status</button><button class="primary-btn" id="saveSettingsBtn" type="button">关闭并刷新</button></div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
