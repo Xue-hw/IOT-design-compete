@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .api.routes import router
 from .config import Settings
@@ -32,6 +33,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+
+    # Serve the Web dashboard from the same origin as the API.  This also
+    # works behind the production /focuscube/ reverse-proxy prefix because
+    # the browser resolves the dashboard assets relative to that prefix.
+    frontend_dir = project_root.parent / "frontend"
+    if frontend_dir.is_dir():
+        app.mount(
+            "/dashboard",
+            StaticFiles(directory=frontend_dir, html=True),
+            name="dashboard",
+        )
 
     @app.get("/health", include_in_schema=False)
     def health() -> dict[str, str | bool]:

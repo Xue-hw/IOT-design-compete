@@ -31,11 +31,19 @@ GET /api/v1/reminders?device_id=<当前选择的设备ID>&since=0
 
 ## 与成员 D
 
-Web 看板除上述接口外，还使用：
+Web 看板已放入仓库 `frontend/`，云服务器部署后推荐直接打开：
 
 ```text
-GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=lux
-GET/PUT /api/v1/config?device_id=<当前选择的设备ID>
+http://82.156.238.244/focuscube/dashboard/
+```
+
+该地址与 API 同源。除状态、日报和提醒外，还使用：
+
+```text
+GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=light.lux
+GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=imu.activity
+GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=power.battery_pct
+GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=focus.state
 ```
 
 ## AI Gateway 联调（成员 C）

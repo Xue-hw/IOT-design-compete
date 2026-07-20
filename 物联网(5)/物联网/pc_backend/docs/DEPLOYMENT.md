@@ -67,6 +67,13 @@ P4 / Web
 ssh my-server 'systemctl status focuscube-backend.service --no-pager'
 ssh my-server 'sudo journalctl -u focuscube-backend.service -n 100 --no-pager'
 curl http://82.156.238.244/focuscube/health
+curl -I http://82.156.238.244/focuscube/dashboard/
+```
+
+Web 看板入口：
+
+```text
+http://82.156.238.244/focuscube/dashboard/
 ```
 
 服务已启用开机启动和异常自动重启：

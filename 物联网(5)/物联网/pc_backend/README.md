@@ -39,6 +39,22 @@ http://192.168.31.100:8000
 
 不能让成员 B、D 使用 `localhost` 访问成员 C 的电脑。
 
+## D 端看板
+
+本仓库已包含 `../frontend`。后端启动后可直接打开：
+
+```text
+http://localhost:8000/dashboard/
+```
+
+当前云服务器入口为：
+
+```text
+http://82.156.238.244/focuscube/dashboard/
+```
+
+页面与 API 同源，不需要写死成员电脑的旧 IP，也不会影响 P4 使用的原有状态字段。
+
 ## AI Gateway 参数
 
 在 `.env` 中填写控制台“查看代码”给出的实际值：

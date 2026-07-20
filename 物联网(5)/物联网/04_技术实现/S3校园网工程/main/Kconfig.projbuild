@@ -1,0 +1,43 @@
+menu "FocusCube S3 Campus Network Configuration"
+
+    config FOCUSCUBE_WIFI_SSID
+        string "WiFi SSID"
+        default "BUPT-portal"
+
+    config FOCUSCUBE_WIFI_PASSWORD
+        string "WiFi password"
+        default ""
+        help
+            Keep empty for the open BUPT-portal network.
+
+    config FOCUSCUBE_WIFI_MAXIMUM_RETRY
+        int "Maximum WiFi retry count"
+        default 10
+        range 1 100
+
+    config FOCUSCUBE_BUPT_ACCOUNT
+        string "BUPT portal account"
+        default ""
+        help
+            Configure locally. Do not commit sdkconfig or sdkconfig.defaults.local.
+
+    config FOCUSCUBE_BUPT_PASSWORD
+        string "BUPT portal password"
+        default ""
+        help
+            Configure locally. The campus portal uses plain HTTP.
+
+    config FOCUSCUBE_BUPT_LOGIN_URL
+        string "BUPT portal login URL"
+        default "http://10.3.8.216/login"
+
+    config FOCUSCUBE_BUPT_PROBE_URL
+        string "BUPT portal redirect probe URL"
+        default "http://connectivitycheck.gstatic.com/generate_204"
+
+    config FOCUSCUBE_BUPT_RECHECK_SECONDS
+        int "Authenticated-state recheck interval (seconds)"
+        default 300
+        range 30 86400
+
+endmenu
