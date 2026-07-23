@@ -24,10 +24,12 @@
     series: {
       "light.lux": { metric: "light.lux", points: [] },
       "imu.activity": { metric: "imu.activity", points: [] },
-      "power.battery_pct": { metric: "power.battery_pct", points: [] }
+      "power.battery_pct": { metric: "power.battery_pct", points: [] },
+      "edge.environment.score": { metric: "edge.environment.score", points: [] }
     },
     focusTimeline: { metric: "focus.state", segments: [] },
-    selectedDeviceId: "focuscube-s3-01",
+    selectedDeviceId: "focuscube-base-01",
+    installation: null,
     activeMetric: "light.lux",
     chartWindow: 60,
     currentPage: "overview",
@@ -116,9 +118,9 @@
   }
 
   function buildUrl(kind, extra = {}) {
-    const deviceId = state.selectedDeviceId || el("deviceSelect")?.value || "focuscube-s3-01";
+    const deviceId = state.selectedDeviceId || el("deviceSelect")?.value || "focuscube-base-01";
     const date = el("dateInput")?.value || todayString();
-    if (kind === "status") return joinUrl(API_PATHS.status);
+    if (kind === "status") return `${joinUrl(API_PATHS.status)}?${new URLSearchParams({ installation_id: "focuscube-base-01" })}`;
     if (kind === "report") return `${joinUrl(API_PATHS.report)}?${new URLSearchParams({ device_id: deviceId, date })}`;
     if (kind === "reminders") return `${joinUrl(API_PATHS.reminders)}?${new URLSearchParams({ device_id: deviceId, since: String(extra.since || 0) })}`;
     if (kind === "timeseries") return `${joinUrl(API_PATHS.timeseries)}?${new URLSearchParams({ device_id: deviceId, date, metric: extra.metric || "light.lux" })}`;
@@ -183,10 +185,22 @@
   }
 
   function devices() {
+    if (Array.isArray(state.installation?.members)) return state.installation.members;
     return Array.isArray(state.status?.devices) ? state.status.devices : [];
   }
 
   function selectedDevice() {
+    if (state.installation) {
+      return {
+        device_id: state.installation.viewId,
+        source: "fusion",
+        online: state.installation.online,
+        ready: state.installation.ready,
+        last_seen: Math.max(0, ...state.installation.members.map((item) => Number(item.last_seen || 0))),
+        telemetry: state.installation.telemetry,
+        summary: state.installation.ready ? "FocusCube 基座已就绪" : state.installation.online ? "FocusCube 基座降级运行" : "FocusCube 基座离线"
+      };
+    }
     return devices().find((device) => String(device.device_id) === String(state.selectedDeviceId))
       || devices().find((device) => String(device.source).toLowerCase() === "s3")
       || devices()[0]
@@ -205,6 +219,7 @@
   }
 
   function currentTelemetry() {
+    if (state.installation) return state.installation.telemetry;
     const device = selectedDevice();
     if (!device || !deviceDataValid(device)) return null;
 
@@ -231,6 +246,49 @@
     };
   }
 
+  function normalizeInstallationStatus(response) {
+    if (!response || typeof response !== "object") return null;
+    const fallbackDevice = Array.isArray(response.devices) ? response.devices[0] : null;
+    const nested = fallbackDevice?.telemetry;
+    const nestedHasBlocks = nested && ["light", "imu", "focus", "edge", "power"].some((key) => nested[key] && typeof nested[key] === "object");
+    const rawTelemetry = response.telemetry && typeof response.telemetry === "object" && Object.keys(response.telemetry).length
+      ? response.telemetry
+      : nestedHasBlocks ? nested : fallbackDevice || {};
+    const availability = response.availability || {};
+    const normalizeBlock = (name) => {
+      const block = rawTelemetry[name];
+      if (!block || typeof block !== "object") return null;
+      const quality = block.quality || (name === "edge" ? "derived" : "measured");
+      const availabilityState = availability[name]?.state;
+      const invalid = block.valid === false || ["partial", "missing", "invalid"].includes(quality);
+      if (invalid) return { valid: false, quality, displayState: quality, warnings: availability[name]?.reason ? [availability[name].reason] : [] };
+      return {
+        ...block,
+        valid: true,
+        quality,
+        displayState: availabilityState || (block.stale ? "stale" : quality === "estimated" ? "estimated" : "fresh"),
+        sourceDeviceId: block.source_device_id || null,
+        warnings: availability[name]?.reason ? [availability[name].reason] : []
+      };
+    };
+    const members = Array.isArray(response.members) ? response.members : [];
+    return {
+      viewId: response.view_id || response.installation_id || fallbackDevice?.device_id || "focuscube-base-01",
+      online: Boolean(response.online ?? fallbackDevice?.online),
+      ready: Boolean(response.ready ?? (members.length >= 2 && members.every((item) => item.online))),
+      telemetry: {
+        light: normalizeBlock("light"),
+        imu: normalizeBlock("imu"),
+        focus: normalizeBlock("focus"),
+        edge: normalizeBlock("edge"),
+        power: normalizeBlock("power")
+      },
+      availability,
+      members,
+      timestamps: Object.fromEntries(["light", "imu", "focus", "edge"].map((name) => [name, rawTelemetry[name]?.ts || null]))
+    };
+  }
+
   function hasFinite(value) {
     if (value === null || value === undefined || value === "" || typeof value === "boolean") return false;
     return Number.isFinite(Number(value));
@@ -238,7 +296,7 @@
 
   function telemetryValue(group, key) {
     const telemetry = currentTelemetry();
-    if (!telemetry || !telemetry[group] || !hasOwn(telemetry[group], key)) return null;
+    if (!telemetry || !telemetry[group] || telemetry[group].valid === false || !hasOwn(telemetry[group], key)) return null;
     const value = telemetry[group][key];
     return hasFinite(value) ? Number(value) : value;
   }
@@ -297,6 +355,7 @@
 
   function applyStatus(payload) {
     state.status = payload && typeof payload === "object" ? payload : {};
+    state.installation = normalizeInstallationStatus(state.status);
     updateDeviceOptions();
     detectStatusChanges();
     renderOverview();
@@ -309,7 +368,7 @@
     if (state.secondaryBusy) return;
     state.secondaryBusy = true;
     setReportLoading(true);
-    const metrics = ["light.lux", "imu.activity", "power.battery_pct"];
+    const metrics = ["light.lux", "imu.activity", "edge.environment.score"];
     const requests = [
       ["report", buildUrl("report")],
       ["reminders", buildUrl("reminders")],
@@ -396,15 +455,8 @@
   function updateDeviceOptions() {
     const select = el("deviceSelect");
     if (!select) return;
-    const list = devices().filter(isS3);
-    if (!list.length) {
-      select.innerHTML = '<option value="focuscube-s3-01">focuscube-s3-01</option>';
-      state.selectedDeviceId = "focuscube-s3-01";
-      return;
-    }
-    const old = state.selectedDeviceId;
-    select.innerHTML = list.map((device) => `<option value="${escapeHtml(device.device_id)}">${escapeHtml(device.device_id)}</option>`).join("");
-    state.selectedDeviceId = list.some((device) => String(device.device_id) === String(old)) ? old : String(list[0].device_id);
+    select.innerHTML = '<option value="focuscube-base-01">focuscube-base-01（融合视图）</option>';
+    state.selectedDeviceId = "focuscube-base-01";
     select.value = state.selectedDeviceId;
   }
 
@@ -461,7 +513,10 @@
     const online = devices().filter((item) => Boolean(item.online)).length;
     const lux = telemetryValue("light", "lux");
     const activity = telemetryValue("imu", "activity");
-    const battery = telemetryValue("power", "battery_pct");
+    const edgeScore = telemetry?.edge?.valid !== false && hasFinite(telemetry?.edge?.environment?.score)
+      ? Number(telemetry.edge.environment.score) * 100 : null;
+    const edgeState = telemetry?.edge?.environment?.state || null;
+    const battery = edgeScore;
     const focusState = telemetry?.focus && hasOwn(telemetry.focus, "state") ? telemetry.focus.state : null;
     const focusMinutes = reportMetric("focus_minutes");
     const ratioRaw = reportMetric("suitable_light_ratio");
@@ -481,14 +536,14 @@
       setText("heroSubtext", `设备状态卡片完全来自 ${joinUrl(API_PATHS.status)}；缺少的字段保持“等待真实数据”，不由前端补造。`);
       setText("lightTag", hasFinite(lux) ? `光照 ${Math.round(lux)} lux${telemetry.light?.label ? ` · ${lightLabelText(telemetry.light.label)}` : ""}` : "光照：等待真实数据");
       setText("focusTag", focusState ? `状态 ${focusStateText(focusState)}${hasFinite(focusMinutes) ? ` · ${Math.round(focusMinutes)} min` : ""}` : hasFinite(focusMinutes) ? `今日专注 ${Math.round(focusMinutes)} min` : "专注：等待真实数据");
-      setText("batteryTag", hasFinite(battery) ? `电量 ${Math.round(battery)}%` : "电量：等待真实数据");
+      setText("batteryTag", hasFinite(edgeScore) ? `环境 ${lightLabelText(edgeState)} · 适宜度 ${Math.round(edgeScore)}%` : "端侧环境分析：等待 EYE 数据");
       setText("syncTag", `同步 ${relativeTime(device.last_seen || state.status?.now)}`);
       setText("stripLux", hasFinite(lux) ? Math.round(lux) : "--");
       setText("stripActivity", hasFinite(activity) ? Number(activity).toFixed(2) : "--");
-      setText("stripBattery", hasFinite(battery) ? `${Math.round(battery)}%` : "--");
+      setText("stripBattery", hasFinite(edgeScore) ? `${Math.round(edgeScore)}%` : "--");
       setBar("stripLuxBar", hasFinite(lux) ? clamp(Number(lux) / 700 * 100, 0, 100) : 0);
       setBar("stripActivityBar", hasFinite(activity) ? clamp(Number(activity) * 100, 0, 100) : 0);
-      setBar("stripBatteryBar", hasFinite(battery) ? clamp(Number(battery), 0, 100) : 0);
+      setBar("stripBatteryBar", hasFinite(edgeScore) ? clamp(Number(edgeScore), 0, 100) : 0);
       renderCountdown(telemetry?.focus || null);
       renderCube(telemetry?.imu || null);
     }
@@ -574,7 +629,9 @@
   }
 
   function renderCube(imu) {
-    const face = imu && hasOwn(imu, "face") && hasFinite(imu.face) && Number(imu.face) > 0 ? Number(imu.face) : null;
+    const faceMap = { "+X": 1, "-X": 2, "+Y": 3, "-Y": 4, "+Z": 5, "-Z": 6, move: 6 };
+    const rawFace = imu && hasOwn(imu, "face") ? imu.face : null;
+    const face = hasFinite(rawFace) && Number(rawFace) >= 0 ? Number(rawFace) + (Number(rawFace) === 0 ? 1 : 0) : faceMap[rawFace] || null;
     const activity = imu && hasOwn(imu, "activity") && hasFinite(imu.activity) ? Number(imu.activity) : null;
     const cube = el("cube3d");
     if (!cube) return;
@@ -591,7 +648,7 @@
     const [x, y] = rotations[face] || [-18, 30];
     const jitter = hasFinite(activity) ? Number(activity) * 3 : 0;
     cube.style.transform = `rotateX(${x + jitter}deg) rotateY(${y + jitter}deg)`;
-    setText("cubeCaption", `IMU FACE ${face}${hasFinite(activity) ? ` · ${Number(activity).toFixed(2)}` : ""}`);
+    setText("cubeCaption", `IMU ${rawFace || `FACE ${face}`}${hasFinite(activity) ? ` · ${Number(activity).toFixed(2)}` : ""}`);
   }
 
   function renderDeviceList() {
@@ -606,6 +663,21 @@
 
   function renderDeviceItem(device) {
     const online = Boolean(device.online);
+    if (device.role) {
+      const health = device.health || {};
+      const roleName = device.role === "edge_controller" ? "EYE · 边缘控制器" : "C3 · AS7341 光照节点";
+      const healthChips = [
+        health.run_state && `<span>${escapeHtml(health.run_state)}</span>`,
+        device.role === "edge_controller" && hasOwn(health, "c3_connected") && `<span>C3 链路 ${health.c3_connected ? "已连接" : "未连接"}</span>`,
+        device.role === "edge_controller" && hasOwn(health, "c3_control_ok") && `<span>控制 ACK ${health.c3_control_ok ? "正常" : "异常"}</span>`,
+        health.firmware_version && `<span>${escapeHtml(health.firmware_version)}</span>`
+      ].filter(Boolean);
+      return `<div class="device-item ${online ? "online" : "offline"} valid">
+        <div class="device-orb"><span></span>${device.role === "edge_controller" ? "EYE" : "C3"}</div>
+        <div class="device-info"><div><strong>${escapeHtml(device.device_id)}</strong><span class="device-status-text">${online ? "在线" : "离线"}</span></div>
+        <p>${roleName}</p><div class="device-fields">${healthChips.length ? healthChips.join("") : "<span>尚无健康数据</span>"}</div>
+        <small>last_seen：${escapeHtml(relativeTime(device.last_seen))}</small></div></div>`;
+    }
     const valid = deviceDataValid(device);
     const telemetry = valid && device.telemetry && typeof device.telemetry === "object" ? device.telemetry : null;
     const chips = [];
@@ -691,9 +763,10 @@
     const metric = state.activeMetric;
     const series = state.series[metric] || { metric, points: [] };
     const titles = {
-      "light.lux": ["光照强度（lux）", "S3 时序接口返回的真实光照数据"],
-      "imu.activity": ["IMU 活动度", "S3 时序接口返回的真实活动度数据"],
-      "power.battery_pct": ["设备电量（%）", "S3 时序接口返回的真实电量数据"]
+      "light.lux": ["光照强度（lux）", "来自 C3 / AS7341 的真实光照数据"],
+      "imu.activity": ["IMU 活动度", "来自 EYE 的真实活动度数据"],
+      "power.battery_pct": ["设备电量（%）", "仅在存在真实电量测量时展示"],
+      "edge.environment.score": ["环境适宜度", "EYE 基于 C3 光谱生成的端侧派生结果"]
     };
     setText("trendChartTitle", titles[metric][0]);
     setText("trendChartDesc", titles[metric][1]);
@@ -732,13 +805,15 @@
     const valid = device ? deviceDataValid(device) : false;
     const lux = valid ? telemetryValue("light", "lux") : null;
     const activity = valid ? telemetryValue("imu", "activity") : null;
-    const battery = valid ? telemetryValue("power", "battery_pct") : null;
+    const telemetry = currentTelemetry();
+    const battery = valid && telemetry?.edge?.valid !== false && hasFinite(telemetry?.edge?.environment?.score)
+      ? Number(telemetry.edge.environment.score) * 100 : null;
     setText("gaugeLux", hasFinite(lux) ? Math.round(lux) : "--");
     setText("gaugeActivity", hasFinite(activity) ? Number(activity).toFixed(2) : "--");
     setText("gaugeBattery", hasFinite(battery) ? Math.round(battery) : "--");
     setText("gaugeLuxLabel", hasFinite(lux) ? "status 返回真实照度" : "等待真实数据");
     setText("gaugeActivityLabel", hasFinite(activity) ? "status 返回真实活动度" : "等待真实数据");
-    setText("gaugeBatteryLabel", hasFinite(battery) ? "status 返回真实电量" : "等待真实数据");
+    setText("gaugeBatteryLabel", hasFinite(battery) ? "EYE 端侧派生 · 非用户专注度" : "等待 EYE 环境分析");
     setGauge("luxGauge", hasFinite(lux) ? clamp(Number(lux) / 700 * 360, 0, 360) : 0);
     setGauge("activityGauge", hasFinite(activity) ? clamp(Number(activity) * 360, 0, 360) : 0);
     setGauge("batteryGauge", hasFinite(battery) ? clamp(Number(battery) / 100 * 360, 0, 360) : 0);
@@ -759,13 +834,16 @@
       target.innerHTML = '<div class="empty-state waiting-live"><span></span>等待 focus.state 时序数据</div>';
       return;
     }
-    const start = Math.min(...segments.map((item) => Number(item.start)).filter(Number.isFinite));
-    const end = Math.max(...segments.map((item) => Number(item.end)).filter(Number.isFinite));
+    const start = Math.min(...segments.map((item) => Number(item.start_ts ?? item.start)).filter(Number.isFinite));
+    const end = Math.max(...segments.map((item) => Number(item.end_ts ?? item.end)).filter(Number.isFinite));
     const span = Math.max(1, end - start);
     target.innerHTML = `<div class="timeline-track">${segments.map((segment) => {
-      const left = clamp((Number(segment.start) - start) / span * 100, 0, 100);
-      const width = clamp((Number(segment.end) - Number(segment.start)) / span * 100, 1, 100);
-      return `<div class="timeline-segment ${escapeHtml(segment.state || "idle")}" style="left:${left}%;width:${width}%"><span>${escapeHtml(focusStateText(segment.state))}</span></div>`;
+      const segmentStart = Number(segment.start_ts ?? segment.start);
+      const segmentEnd = Number(segment.end_ts ?? segment.end);
+      const stateValue = segment.value ?? segment.state;
+      const left = clamp((segmentStart - start) / span * 100, 0, 100);
+      const width = clamp((segmentEnd - segmentStart) / span * 100, 1, 100);
+      return `<div class="timeline-segment ${escapeHtml(stateValue || "idle")}" style="left:${left}%;width:${width}%"><span>${escapeHtml(focusStateText(stateValue))}</span></div>`;
     }).join("")}<i class="timeline-scan"></i></div>`;
   }
 
@@ -774,7 +852,7 @@
     const rows = [];
     if (telemetry?.light && hasOwn(telemetry.light, "lux") && hasFinite(telemetry.light.lux)) rows.push(["光照字段", `${Math.round(Number(telemetry.light.lux))} lux`, "来自 status.telemetry.light.lux"]);
     if (telemetry?.imu && hasOwn(telemetry.imu, "activity") && hasFinite(telemetry.imu.activity)) rows.push(["活动度字段", Number(telemetry.imu.activity).toFixed(2), "来自 status.telemetry.imu.activity"]);
-    if (telemetry?.power && hasOwn(telemetry.power, "battery_pct") && hasFinite(telemetry.power.battery_pct)) rows.push(["电量字段", `${Math.round(Number(telemetry.power.battery_pct))}%`, "来自 status.telemetry.power.battery_pct"]);
+    if (telemetry?.edge?.environment && hasFinite(telemetry.edge.environment.score)) rows.push(["环境适宜度", `${Math.round(Number(telemetry.edge.environment.score) * 100)}%`, "EYE 端侧派生，原始光照仍只来自 C3"]);
     if (telemetry?.focus && hasOwn(telemetry.focus, "state")) rows.push(["专注字段", focusStateText(telemetry.focus.state), "来自 status.telemetry.focus.state"]);
     const target = el("correlationList");
     if (!target) return;

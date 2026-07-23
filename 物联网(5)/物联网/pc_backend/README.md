@@ -4,17 +4,18 @@
 
 ## 当前设备口径
 
-- 产品主设备只有 `ESP32-S3-EYE` 和 `ESP32-S3 Cube`。EYE 用于功能测试，Cube 用于最终演示且是 EYE 的功能子集；当前不要求二者同时在线。
-- AS7341 虽连接在 ESP32-C3 上，但 C3 只是 EYE/Cube 共用的光照采集与传输子系统，不作为第三个产品节点展示。
-- `focuscube-c3-proxy-01` 与 `c3-as7341-proxy` 暂时保留用于追踪光照物理来源。状态响应会把前者标记为 `product_node: false`、`device_role: sensor_proxy`。
-- EYE 屏幕当前未启用，Cube 没有屏幕。现阶段的正式展示端是 P4 七寸屏。
-- EYE 测试结束前不提前建立正式绑定；通过 `FOCUSCUBE_ACTIVE_DEVICE_ID` 和 P4 的 `CONFIG_FOCUSCUBE_DEVICE_ID` 选择同一个当前数据源即可。
+- `focuscube-eye-01` 是边缘控制节点，负责 IMU、专注会话、健康状态和派生环境结论。
+- `focuscube-c3-01` 是 AS7341 光照节点，也是原始光照数据的唯一云端上传者。
+- `focuscube-base-01` 是后端融合后的逻辑基座视图，不是第三块物理设备。
+- P4 与 Web 默认读取 `focuscube-base-01`；物理节点状态仍可分别用于诊断。
+- 旧版单节点 telemetry 继续兼容，但新的双节点实机应使用 `schema_version: 2`。
 
 ## 已实现接口
 
 ```text
 POST    /api/v1/telemetry
-GET     /api/v1/status
+GET     /api/v1/status?installation_id=focuscube-base-01
+GET     /api/v1/status?device_id=focuscube-eye-01
 GET     /api/v1/report/daily?device_id=&date=
 GET     /api/v1/reminders?device_id=&since=
 GET     /api/v1/timeseries?device_id=&date=&metric=
@@ -75,4 +76,4 @@ python scripts/verify_acceptance.py
 pytest -q
 ```
 
-成员 A 的原始 JSON 可直接发送，示例位于 `examples/telemetry.json`。该文件仍是兼容性样例，不代表 EYE/Cube 的正式 ID 已确定。
+旧版兼容样例位于 `examples/telemetry.json`；多节点 v2 的 C3/EYE 完整样例及身份、幂等、融合测试位于 `tests/test_multinode.py`。

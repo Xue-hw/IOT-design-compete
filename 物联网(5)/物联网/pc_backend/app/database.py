@@ -32,9 +32,13 @@ class Database:
     def connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys=ON")
         try:
             yield connection
             connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             connection.close()
 
@@ -100,7 +104,103 @@ class Database:
                     online_timeout_s INTEGER NOT NULL,
                     focus_session_minutes INTEGER NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS device_registry (
+                    device_id TEXT PRIMARY KEY,
+                    installation_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1
+                );
+                CREATE TABLE IF NOT EXISTS telemetry_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_id TEXT NOT NULL UNIQUE,
+                    payload_hash TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    device_id TEXT NOT NULL,
+                    installation_id TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    boot_id TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    ts INTEGER NOT NULL,
+                    received_at INTEGER NOT NULL,
+                    time_quality TEXT NOT NULL DEFAULT 'device',
+                    session_id TEXT,
+                    business_accepted INTEGER NOT NULL DEFAULT 0,
+                    raw_payload_json TEXT NOT NULL,
+                    normalized_payload_json TEXT NOT NULL,
+                    warnings_json TEXT NOT NULL DEFAULT '[]'
+                );
+                CREATE INDEX IF NOT EXISTS idx_events_installation_ts
+                    ON telemetry_events(installation_id, ts);
+                CREATE INDEX IF NOT EXISTS idx_events_session_ts
+                    ON telemetry_events(session_id, ts);
+                CREATE TABLE IF NOT EXISTS light_samples (
+                    event_id INTEGER PRIMARY KEY,
+                    valid INTEGER NOT NULL, quality TEXT NOT NULL,
+                    invalid_reason TEXT, missing_fields_json TEXT NOT NULL DEFAULT '[]',
+                    sample_seq INTEGER, lux REAL, device_label TEXT, server_label TEXT,
+                    sensor TEXT, saturated INTEGER, calibrated INTEGER,
+                    gain REAL, integration_ms REAL,
+                    FOREIGN KEY(event_id) REFERENCES telemetry_events(id)
+                );
+                CREATE TABLE IF NOT EXISTS imu_samples (
+                    event_id INTEGER PRIMARY KEY,
+                    valid INTEGER NOT NULL, quality TEXT NOT NULL,
+                    invalid_reason TEXT, missing_fields_json TEXT NOT NULL DEFAULT '[]',
+                    face TEXT, mode TEXT, activity REAL,
+                    FOREIGN KEY(event_id) REFERENCES telemetry_events(id)
+                );
+                CREATE TABLE IF NOT EXISTS focus_events (
+                    event_id INTEGER PRIMARY KEY,
+                    valid INTEGER NOT NULL, quality TEXT NOT NULL,
+                    invalid_reason TEXT, missing_fields_json TEXT NOT NULL DEFAULT '[]',
+                    state TEXT, remaining_s INTEGER, session_count INTEGER, ended_reason TEXT,
+                    FOREIGN KEY(event_id) REFERENCES telemetry_events(id)
+                );
+                CREATE TABLE IF NOT EXISTS edge_results (
+                    event_id INTEGER PRIMARY KEY,
+                    environment_json TEXT, motion_json TEXT,
+                    FOREIGN KEY(event_id) REFERENCES telemetry_events(id)
+                );
+                CREATE TABLE IF NOT EXISTS power_samples (
+                    event_id INTEGER PRIMARY KEY,
+                    valid INTEGER NOT NULL, quality TEXT NOT NULL,
+                    invalid_reason TEXT, missing_fields_json TEXT NOT NULL DEFAULT '[]',
+                    battery_pct INTEGER, charging INTEGER,
+                    FOREIGN KEY(event_id) REFERENCES telemetry_events(id)
+                );
+                CREATE TABLE IF NOT EXISTS health_samples (
+                    event_id INTEGER PRIMARY KEY,
+                    health_json TEXT NOT NULL,
+                    FOREIGN KEY(event_id) REFERENCES telemetry_events(id)
+                );
+                CREATE TABLE IF NOT EXISTS focus_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    installation_id TEXT NOT NULL,
+                    eye_device_id TEXT NOT NULL,
+                    c3_device_id TEXT,
+                    started_at INTEGER,
+                    ended_at INTEGER,
+                    state TEXT NOT NULL,
+                    ended_reason TEXT
+                );
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL
+                );
                 """
+            )
+            db.executemany(
+                """INSERT INTO device_registry(device_id, installation_id, role, source, enabled)
+                   VALUES (?, ?, ?, ?, 1)
+                   ON CONFLICT(device_id) DO UPDATE SET
+                     installation_id=excluded.installation_id, role=excluded.role,
+                     source=excluded.source, enabled=1""",
+                [
+                    ("focuscube-eye-01", "focuscube-base-01", "edge_controller", "s3-eye-edge"),
+                    ("focuscube-c3-01", "focuscube-base-01", "light_sensor", "c3-as7341"),
+                ],
             )
 
             # 兼容已有 SQLite 数据库：为旧 telemetry 表补充有效性字段。

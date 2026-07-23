@@ -17,14 +17,10 @@ class Settings:
     timezone: str = "Asia/Shanghai"
     cors_origins: str = "*"
 
-    # 当前默认展示和查询的活动数据源。每次只选择一个。
-    #
-    # 光照代理联调阶段：
-    # focuscube-c3-proxy-01
-    #
-    # EYE 功能测试完成后，再按统一下发的正式设备 ID 切换；不要在此处
-    # 提前假定 EYE 与 Cube 同时在线或共用同一个正式 ID。
-    active_device_id: str = "focuscube-c3-proxy-01"
+    # 默认查询逻辑基座融合视图。两个物理节点分别保留自身身份：
+    # EYE 上传姿态、会话和派生结果，C3 上传 AS7341 原始光照。
+    active_device_id: str = "focuscube-base-01"
+    default_installation_id: str = "focuscube-base-01"
 
     # 小组正式使用：火山引擎边缘大模型网关（AI Gateway）。
     # base_url、api_key、model 必须复制控制台“查看代码”中的实际值。
@@ -63,7 +59,11 @@ class Settings:
             ),
             active_device_id=os.getenv(
                 "FOCUSCUBE_ACTIVE_DEVICE_ID",
-                "focuscube-c3-proxy-01",
+                "focuscube-base-01",
+            ),
+            default_installation_id=os.getenv(
+                "FOCUSCUBE_DEFAULT_INSTALLATION_ID",
+                "focuscube-base-01",
             ),
             llm_provider=os.getenv(
                 "FOCUSCUBE_LLM_PROVIDER",
