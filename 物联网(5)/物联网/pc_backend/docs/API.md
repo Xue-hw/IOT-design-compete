@@ -4,7 +4,7 @@
 
 这些路径是 FocusCube 小组内部约定的 HTTP 接口，不是乐鑫规定的固定路径；它们用于实现赛事要求的设备感知数据上行、云端大模型处理和结果展示。
 
-设备身份约定：`device_id` 表示当前被查询的数据源，`source` 表示数据的物理上传来源。`focuscube-c3-proxy-01` / `c3-as7341-proxy` 是 AS7341 经 C3 上传的临时追踪标识，不是第三个产品节点。EYE 与 Cube 的正式 ID 在 EYE 测试后再统一确定，当前不要据此假定二者同时在线。
+设备身份约定：`focuscube-eye-01` 负责 IMU、专注会话和派生结果，`focuscube-c3-01` 负责 AS7341 原始光照，`focuscube-base-01` 是后端融合逻辑视图。新固件使用 `schema_version: 2`；不含该字段的旧请求继续走兼容校验。
 
 ## 1. POST `/api/v1/telemetry`
 
@@ -37,15 +37,9 @@
 
 ## 2. GET `/api/v1/status`
 
-推荐显式传入 `device_id`，例如 `/api/v1/status?device_id=focuscube-c3-proxy-01`。未传入时，后端只返回 `FOCUSCUBE_ACTIVE_DEVICE_ID` 对应的当前数据源；不会默认把 EYE、Cube、C3 展示成三个并行产品节点。P4 和 Web 可每 2-5 秒轮询一次。
+融合视图使用 `/api/v1/status?installation_id=focuscube-base-01`。物理节点诊断使用 `device_id=focuscube-eye-01` 或 `device_id=focuscube-c3-01`。两个参数不能同时传入；不传参数时默认返回逻辑基座。P4 和 Web 可每 2-5 秒轮询一次。
 
-每个设备状态额外返回：
-
-- `product_node`：是否为产品主设备；C3 临时代理为 `false`。
-- `device_role`：`primary_device` 或 `sensor_proxy`。
-- `physical_source`：原样保留上传时的 `source`，用于追踪 AS7341/C3 链路。
-- 顶层 `light/imu/focus/power`：继续供 P4 和已有调用方使用。
-- `telemetry`：D 端 Web 看板兼容对象，内部复用上述四组数据；`imu/focus/power.valid=false` 表示该子系统当前只是占位数据。
+融合响应包含 `availability`、`telemetry` 和 `members`，并在每个有效数据块中保留 `source_device_id`、`quality`、`ts`、`stale`。`devices[0]` 提供旧版 P4/Web 可读取的兼容融合结构。
 
 ## 3. GET `/api/v1/report/daily`
 
@@ -70,9 +64,10 @@
 ```text
 lux / light.lux / activity / imu.activity / battery_pct / power.battery_pct
 remaining_s / focus.remaining_s / session_count / focus.session_count / focus.state
+edge.environment.score
 ```
 
-`focus.state` 返回 `segments`，每段包含 `start`、`end` 和 `state`；其他指标返回 `points`。
+融合视图中 `focus.state` 返回 `segments`，每段包含 `start_ts`、`end_ts`、`value` 和来源；其他指标返回带 `source_device_id` 的 `points`。
 
 ## 6. GET/PUT `/api/v1/config`
 

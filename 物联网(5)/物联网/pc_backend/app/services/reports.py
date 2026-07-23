@@ -10,6 +10,7 @@ from ..config import Settings
 from ..database import Database
 from .aggregation import aggregate_daily, build_fusion_context
 from .llm import build_rule_fallback, call_cloud_llm
+from .multinode import INSTALLATION_ID, daily_rows
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,11 @@ def get_or_create_daily_report(
                 "suggestions": cached["suggestions"],
             }
 
-    rows = db.telemetry_for_date(device_id, report_date)
+    rows = (
+        daily_rows(db, report_date)
+        if device_id == INSTALLATION_ID
+        else db.telemetry_for_date(device_id, report_date)
+    )
     config = db.get_config(device_id)
     metrics = aggregate_daily(rows, config)
     fusion_context = build_fusion_context(metrics)

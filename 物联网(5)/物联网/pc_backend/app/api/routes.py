@@ -11,6 +11,8 @@ from fastapi import (
     Request,
     status,
 )
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from ..schemas import (
     DeviceConfigUpdate,
@@ -19,6 +21,13 @@ from ..schemas import (
 from ..device_identity import describe_device
 from ..services.reminders import create_rule_reminders
 from ..services.reports import get_or_create_daily_report
+from ..services.multinode import (
+    INSTALLATION_ID,
+    event_timeseries,
+    ingest_v2,
+    installation_status,
+    physical_status,
+)
 
 
 router = APIRouter(prefix="/api/v1")
@@ -69,14 +78,26 @@ def _summary(row: dict[str, Any]) -> str:
     "/telemetry",
     status_code=status.HTTP_201_CREATED,
 )
-def receive_telemetry(
-    payload: TelemetryIn,
+async def receive_telemetry(
     request: Request,
-) -> dict[str, Any]:
+) -> Any:
     """接收并保存设备 telemetry。"""
-
     now = int(time.time())
-
+    if request.headers.get("content-length") and int(request.headers["content-length"]) > 16384:
+        raise HTTPException(status_code=413, detail={"code": "payload_too_large"})
+    try:
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail={"code": "invalid_json"})
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=422, detail={"code": "invalid_json_object"})
+    if "schema_version" in raw:
+        code, result = ingest_v2(request.app.state.db, raw, now)
+        return JSONResponse(status_code=code, content=result)
+    try:
+        payload = TelemetryIn.model_validate(raw)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
     request.app.state.db.insert_telemetry(
         payload,
         received_at=now,
@@ -101,6 +122,7 @@ def receive_telemetry(
 def get_status(
     request: Request,
     device_id: str | None = None,
+    installation_id: str | None = None,
 ) -> dict[str, Any]:
     """获取设备最新状态。
 
@@ -109,15 +131,32 @@ def get_status(
     """
 
     now = int(time.time())
+    if device_id is not None and installation_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "ambiguous_status_target", "message": "use only one status target parameter"},
+        )
+    target = installation_id or device_id
+    if target is None:
+        target = getattr(request.app.state.settings, "default_installation_id", INSTALLATION_ID)
+    if target == INSTALLATION_ID:
+        return installation_status(request.app.state.db, now)
+    if target in {"focuscube-eye-01", "focuscube-c3-01"}:
+        return physical_status(request.app.state.db, target, now)
 
     active_device_id = (
-        device_id
+        target
         or request.app.state.settings.active_device_id
     )
 
     rows = request.app.state.db.latest_devices(
         device_id=active_device_id,
     )
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "target_not_found", "message": "status target does not exist"},
+        )
 
     devices: list[dict[str, Any]] = []
 
@@ -265,6 +304,17 @@ def get_timeseries(
     时才进入时间序列。
     """
 
+    if device_id == INSTALLATION_ID:
+        report_date = (
+            date_value
+            or datetime.now(request.app.state.db.timezone).date()
+        )
+        aliases = {
+            "lux": "light.lux", "activity": "imu.activity",
+            "remaining_s": "focus.remaining_s",
+        }
+        return event_timeseries(request.app.state.db, aliases.get(metric, metric), report_date)
+
     allowed = {
         "lux": "lux",
         "light.lux": "lux",
@@ -382,6 +432,8 @@ def get_config(
 ) -> dict[str, Any]:
     """获取指定设备配置。"""
 
+    if device_id in {"focuscube-eye-01", "focuscube-c3-01"}:
+        raise HTTPException(status_code=400, detail={"code": "config_requires_installation_view"})
     return request.app.state.db.get_config(
         device_id
     )
@@ -398,6 +450,8 @@ def update_config(
 ) -> dict[str, Any]:
     """修改指定设备配置。"""
 
+    if device_id in {"focuscube-eye-01", "focuscube-c3-01"}:
+        raise HTTPException(status_code=400, detail={"code": "config_requires_installation_view"})
     updates = payload.model_dump(
         exclude_none=True
     )

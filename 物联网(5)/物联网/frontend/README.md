@@ -57,12 +57,14 @@ http://127.0.0.1:5173
 http://127.0.0.1:5173/?api=http://其他IP:8000
 ```
 
+状态请求实际带有 `installation_id=focuscube-base-01`，看板同时展示逻辑基座和 EYE/C3 物理节点诊断信息。
+
 ## 状态兼容规则
 
-- 同时兼容 `device.telemetry.light` 和旧版 `device.light` 顶层结构。
-- `telemetry.valid` 不存在时按 `true` 处理。
-- `telemetry.valid:false` 时显示“等待真实数据”。
-- `imu/focus/power` 子对象的 `valid:false` 会隐藏该子系统的占位值。
+- 优先读取多节点响应中的 `telemetry`、`availability` 和 `members`。
+- 同时兼容逻辑设备 `devices[0].telemetry`，供 P4/旧调用方共用。
+- `valid:false`、`partial`、`missing`、`invalid` 不会被当成真实测量值展示。
+- `stale` 数据保留来源提示，但不会伪装成新鲜数据。
 - 后续恢复为有效数据时自动恢复实际字段展示。
 - 状态接口每 2 秒刷新；日报、提醒和时序每 6 秒刷新。
 - 接口失败时显示连接告警，不生成本地伪造遥测。
@@ -73,4 +75,4 @@ http://127.0.0.1:5173/?api=http://其他IP:8000
 python tests/smoke_test.py
 ```
 
-测试覆盖 valid 状态切换、真实字段恢复、趋势、日报和诊断页面。
+测试覆盖融合状态、EYE/C3 成员诊断、C3 光照、EYE 活动度、派生环境趋势和融合日报。

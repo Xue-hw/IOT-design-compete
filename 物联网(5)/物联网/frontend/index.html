@@ -34,7 +34,7 @@
       </div>
 
       <div class="sidebar-foot">
-        <div class="mini-flow"><span>S3</span><i></i><span>Backend</span><i></i><span>AI</span><i></i><span>P4/Web</span></div>
+        <div class="mini-flow"><span>EYE+C3</span><i></i><span>Backend</span><i></i><span>AI</span><i></i><span>P4/Web</span></div>
         <p>结构化感知数据实时融合<br>浏览器端不保存模型密钥</p>
       </div>
     </aside>
@@ -46,7 +46,7 @@
           <h1 id="pageTitle">实时总览</h1>
         </div>
         <div class="top-actions">
-          <label class="compact-field"><span>设备</span><select id="deviceSelect"><option value="focuscube-s3-01">focuscube-s3-01</option></select></label>
+          <label class="compact-field"><span>产品视图</span><select id="deviceSelect"><option value="focuscube-base-01">focuscube-base-01（融合视图）</option></select></label>
           <label class="compact-field"><span>日期</span><input id="dateInput" type="date" /></label>
           <div class="connection-chip loading" id="connectionChip"><span class="status-dot"></span><span id="connectionText">正在连接</span><em id="latencyText">-- ms</em></div>
           <button class="icon-btn" id="refreshBtn" type="button" title="立即同步">↻</button>
@@ -71,7 +71,7 @@
             <div class="telemetry-strip" id="telemetryStrip">
               <div><span>lux</span><b id="stripLux">--</b><i class="strip-bar"><em id="stripLuxBar"></em></i></div>
               <div><span>activity</span><b id="stripActivity">--</b><i class="strip-bar"><em id="stripActivityBar"></em></i></div>
-              <div><span>battery</span><b id="stripBattery">--</b><i class="strip-bar"><em id="stripBatteryBar"></em></i></div>
+              <div><span>环境适宜度</span><b id="stripBattery">--</b><i class="strip-bar"><em id="stripBatteryBar"></em></i></div>
             </div>
           </div>
 
@@ -162,7 +162,7 @@
         <article class="trend-toolbar panel">
           <div><p class="section-kicker">REAL-TIME SENSOR STREAM</p><h2>多源数据流监测</h2><span class="stream-subtitle" id="trendStreamState">持续接收数据中</span></div>
           <div class="toolbar-actions">
-            <div class="segmented" id="metricTabs"><button class="active" data-metric="light.lux">光照</button><button data-metric="imu.activity">活动度</button><button data-metric="power.battery_pct">电量</button></div>
+            <div class="segmented" id="metricTabs"><button class="active" data-metric="light.lux">C3 光照</button><button data-metric="imu.activity">EYE 活动度</button><button data-metric="edge.environment.score">环境适宜度</button></div>
             <div class="window-control"><span>窗口</span><button data-window="30">30</button><button class="active" data-window="60">60</button><button data-window="120">120</button></div>
           </div>
         </article>
@@ -174,7 +174,7 @@
         <div class="sensor-gauge-grid">
           <article class="panel gauge-panel"><p class="section-kicker">LIGHT</p><div class="mini-gauge" id="luxGauge"><span><b id="gaugeLux">--</b><small>lux</small></span></div><h3>环境照度</h3><p id="gaugeLuxLabel">等待数据</p></article>
           <article class="panel gauge-panel"><p class="section-kicker">ACTIVITY</p><div class="mini-gauge" id="activityGauge"><span><b id="gaugeActivity">--</b><small>level</small></span></div><h3>姿态活动度</h3><p id="gaugeActivityLabel">等待数据</p></article>
-          <article class="panel gauge-panel"><p class="section-kicker">BATTERY</p><div class="mini-gauge" id="batteryGauge"><span><b id="gaugeBattery">--</b><small>%</small></span></div><h3>设备续航</h3><p id="gaugeBatteryLabel">等待数据</p></article>
+          <article class="panel gauge-panel"><p class="section-kicker">EDGE ENVIRONMENT</p><div class="mini-gauge" id="batteryGauge"><span><b id="gaugeBattery">--</b><small>%</small></span></div><h3>环境适宜度</h3><p id="gaugeBatteryLabel">EYE 端侧派生</p></article>
           <article class="panel decision-panel"><p class="section-kicker">FUSION DECISION</p><div class="decision-orb" id="decisionOrb"><span></span><b id="fusionState">计算中</b></div><p id="fusionResult">等待多源数据融合</p><div class="confidence"><span>融合置信度</span><i><em id="confidenceBar"></em></i><b id="confidenceValue">--%</b></div></article>
         </div>
         <div class="two-col-grid">
@@ -186,7 +186,7 @@
       <section class="page" id="page-report">
         <div class="report-layout">
           <article class="panel report-main">
-            <div class="report-cover"><div><p class="section-kicker">LIVE DAILY INSIGHT</p><h2>FocusCube 动态智能复盘</h2><p id="reportMeta">-- · focuscube-s3-01</p></div><div class="report-generation-state"><span class="model-orb"></span><b id="reportModelState">云端模型待命</b><button id="reportGenerateBtn" type="button">生成最新复盘</button></div></div>
+            <div class="report-cover"><div><p class="section-kicker">LIVE DAILY INSIGHT</p><h2>FocusCube 动态智能复盘</h2><p id="reportMeta">-- · focuscube-base-01</p></div><div class="report-generation-state"><span class="model-orb"></span><b id="reportModelState">云端模型待命</b><button id="reportGenerateBtn" type="button">生成最新复盘</button></div></div>
             <div class="generation-pipeline" id="generationPipeline"><div data-step="collect"><i>1</i><span>汇聚传感器数据</span></div><b></b><div data-step="aggregate"><i>2</i><span>计算结构化指标</span></div><b></b><div data-step="reason"><i>3</i><span>大模型推理</span></div><b></b><div data-step="deliver"><i>4</i><span>下发报告与提醒</span></div></div>
             <div class="report-section"><h3>今日综合复盘</h3><p id="fullReportText">等待生成…</p></div>
             <div class="report-section"><h3>动态行动建议</h3><ol id="fullSuggestionList"></ol></div>
@@ -217,7 +217,7 @@
       <div class="modal-head"><div><p class="section-kicker">FIXED CONNECTION</p><h2>统一接口与刷新策略</h2></div><button id="closeSettingsBtn" class="icon-btn" type="button">×</button></div>
       <div class="form-grid">
         <label><span>数据模式</span><select id="modeSelect" disabled><option value="live">仅真实接口</option></select></label>
-        <label><span>后端基础地址</span><input id="baseUrlInput" type="url" value="http://82.156.238.244/focuscube" readonly /><small>同源运行时自动使用当前后端；单独运行时默认使用已部署的云端入口。</small></label>
+        <label><span>后端基础地址</span><input id="baseUrlInput" type="url" value="http://82.156.238.244/focuscube" readonly /><small>同源运行时自动使用当前后端；单独运行时默认使用公网入口。</small></label>
         <label><span>状态刷新间隔</span><select id="refreshIntervalSelect" disabled><option value="2">2 秒</option></select></label>
         <label class="check-label"><input id="autoFallbackCheck" type="checkbox" disabled /><span>接口失败时不生成占位 telemetry</span></label>
       </div>

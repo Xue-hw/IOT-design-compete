@@ -2,32 +2,32 @@
 
 ## 联调前提
 
-- 当前一次只选择 EYE 或 Cube 中的一个主设备；二者不要求同时在线。
-- C3/AS7341 代理链路继续保留，但不能在界面或架构图中被解释成第三个产品节点。
-- EYE 测试完成前不下发正式设备绑定。P4 与后端先把当前选择配置为同一个 `device_id`。
+- EYE 与 C3 是两个物理节点，共用 `installation_id=focuscube-base-01`。
+- C3 唯一上传 AS7341 原始光照；EYE 上传 IMU、专注会话和派生环境结果。
+- P4 与 Web 默认读取逻辑基座 `focuscube-base-01`。
 
 ## 与成员 A
 
-成员 A 按 `examples/telemetry.json` 调用：
+成员 A 按 `tests/test_multinode.py` 中的 C3/EYE v2 样例调用：
 
 ```text
 POST http://<成员C局域网IP>:8000/api/v1/telemetry
 Content-Type: application/json
 ```
 
-验收：HTTP 2xx、响应为 JSON、数据已保存、显式传入同一 `device_id` 的 `GET /api/v1/status` 能看到最新状态。
+验收：两节点请求均为 HTTP 2xx，融合状态能看到正确来源，重复 `message_id` 幂等，冲突消息被拒绝。
 
 ## 与成员 B
 
 P4 读取：
 
 ```text
-GET /api/v1/status?device_id=<当前选择的设备ID>
-GET /api/v1/report/daily?device_id=<当前选择的设备ID>&date=YYYY-MM-DD
-GET /api/v1/reminders?device_id=<当前选择的设备ID>&since=0
+GET /api/v1/status?installation_id=focuscube-base-01
+GET /api/v1/report/daily?device_id=focuscube-base-01&date=YYYY-MM-DD
+GET /api/v1/reminders?device_id=focuscube-base-01&since=0
 ```
 
-代理联调阶段 `<当前选择的设备ID>` 可继续使用 `focuscube-c3-proxy-01`；EYE/Cube 正式 ID 等统一下发后再改。P4 三个请求共用同一项 `CONFIG_FOCUSCUBE_DEVICE_ID`，不要分别硬编码。
+P4 三个请求统一使用逻辑基座 ID；物理节点 ID 只用于诊断。
 
 ## 与成员 D
 
@@ -40,10 +40,10 @@ http://82.156.238.244/focuscube/dashboard/
 该地址与 API 同源。除状态、日报和提醒外，还使用：
 
 ```text
-GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=light.lux
-GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=imu.activity
-GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=power.battery_pct
-GET /api/v1/timeseries?device_id=<当前选择的设备ID>&date=YYYY-MM-DD&metric=focus.state
+GET /api/v1/timeseries?device_id=focuscube-base-01&date=YYYY-MM-DD&metric=light.lux
+GET /api/v1/timeseries?device_id=focuscube-base-01&date=YYYY-MM-DD&metric=imu.activity
+GET /api/v1/timeseries?device_id=focuscube-base-01&date=YYYY-MM-DD&metric=edge.environment.score
+GET /api/v1/timeseries?device_id=focuscube-base-01&date=YYYY-MM-DD&metric=focus.state
 ```
 
 ## AI Gateway 联调（成员 C）
